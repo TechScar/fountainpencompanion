@@ -16,7 +16,7 @@ import { RelativeDate } from "../../components/RelativeDate";
 
 export const storageKeyHiddenFields = "fpc-currently-inked-table-hidden-fields";
 
-export const CurrentlyInkedTable = ({ currentlyInked, onLayoutChange }) => {
+export const CurrentlyInkedTable = ({ currentlyInked, onLayoutChange, onUsageRecorded }) => {
   const columns = useMemo(
     () => [
       {
@@ -107,11 +107,13 @@ export const CurrentlyInkedTable = ({ currentlyInked, onLayoutChange }) => {
         header: "Actions",
         meta: { className: "fpc-actions-column" },
         cell: ({ row }) => {
-          return <ActionsCell {...row.original} id={row.original.id} />;
+          return (
+            <ActionsCell {...row.original} id={row.original.id} onUsageRecorded={onUsageRecorded} />
+          );
         }
       }
     ],
-    []
+    [onUsageRecorded]
   );
 
   const defaultHiddenFields = useMemo(() => {

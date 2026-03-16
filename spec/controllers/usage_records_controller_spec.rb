@@ -26,6 +26,16 @@ describe UsageRecordsController do
         expect(usage_record.used_on).to eq(Date.today)
       end
 
+      it "returns serialized currently inked entry as JSON" do
+        post :create, params: { currently_inked_id: currently_inked.id }, format: :json
+        expect(response).to have_http_status(:created)
+        json = JSON.parse(response.body)
+        expect(json["data"]["type"]).to eq("currently_inked")
+        expect(json["data"]["id"]).to eq(currently_inked.id.to_s)
+        expect(json["data"]["attributes"]["used_today"]).to eq(true)
+        expect(json["data"]["attributes"]["daily_usage"]).to be_present
+      end
+
       it "only creates one record for a given day" do
         expect do
           post :create, params: { currently_inked_id: currently_inked.id }, format: :json

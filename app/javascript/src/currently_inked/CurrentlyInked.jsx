@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Jsona from "jsona";
 import { getRequest } from "../fetch";
 import { useLayout } from "../useLayout";
@@ -26,13 +26,23 @@ export const CurrentlyInked = () => {
     getData();
   }, []);
 
+  const updateEntry = useCallback((updatedEntry) => {
+    setCurrentlyInked((prev) =>
+      prev.map((entry) => (entry.id === updatedEntry.id ? updatedEntry : entry))
+    );
+  }, []);
+
   const screen = useScreen();
   const { layout, onLayoutChange } = useLayout(storageKeyLayout);
 
   if (layout ? layout === "card" : screen.isSmall) {
     if (currentlyInked) {
       return (
-        <CurrentlyInkedCards currentlyInked={currentlyInked} onLayoutChange={onLayoutChange} />
+        <CurrentlyInkedCards
+          currentlyInked={currentlyInked}
+          onLayoutChange={onLayoutChange}
+          onUsageRecorded={updateEntry}
+        />
       );
     } else {
       return <CardsPlaceholder />;
@@ -40,7 +50,11 @@ export const CurrentlyInked = () => {
   } else {
     if (currentlyInked) {
       return (
-        <CurrentlyInkedTable currentlyInked={currentlyInked} onLayoutChange={onLayoutChange} />
+        <CurrentlyInkedTable
+          currentlyInked={currentlyInked}
+          onLayoutChange={onLayoutChange}
+          onUsageRecorded={updateEntry}
+        />
       );
     } else {
       return <TablePlaceholder />;
