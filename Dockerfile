@@ -8,7 +8,7 @@
 # For a containerized dev environment, see Dev Containers: https://guides.rubyonrails.org/getting_started_with_devcontainer.html
 
 # Make sure RUBY_VERSION matches the Ruby version in .ruby-version
-ARG RUBY_VERSION=3.4.4
+ARG RUBY_VERSION=4.0.1
 FROM docker.io/library/ruby:$RUBY_VERSION-slim AS base
 
 # Rails app lives here
@@ -47,10 +47,10 @@ RUN apt-get update -qq && \
 COPY Gemfile Gemfile.lock ./
 
 # Install npm packages
-COPY .nvmrc package.json yarn.lock ./
+COPY .node-version package.json yarn.lock ./
 RUN if [ $(uname -m) = "aarch64" ]; then NODE_ARCH=arm64 ; else NODE_ARCH=x64 ; fi; \
   uname -m && \
-  NODE_VERSION=$(cat .nvmrc) && \
+  NODE_VERSION=$(cat .node-version) && \
   NODE_TAR_FILE="node-$NODE_VERSION-linux-$NODE_ARCH.tar.gz" && \
   curl -s "https://nodejs.org/dist/$NODE_VERSION/$NODE_TAR_FILE" --output $NODE_TAR_FILE && \
   mkdir -p /opt/nodejs && \
