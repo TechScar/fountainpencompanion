@@ -1,29 +1,58 @@
 import React, { useState } from "react";
+import Jsona from "jsona";
+import { postRequest } from "../../fetch";
 
-export const UsageButton = ({ used, id, testingMode = false }) => {
-  const [displayAsUsed, setDisplayAsUsed] = useState(used);
-  if (displayAsUsed) {
+const formatter = new Jsona();
+
+const buttonStyle = { width: "2.5em", textAlign: "center" };
+
+export const UsageButton = ({ used, id, onUsageRecorded }) => {
+  const [loading, setLoading] = useState(false);
+
+  if (used) {
     return (
-      <div className="btn btn-secondary" title="Already recorded usage for today">
+      <div
+        className="btn btn-secondary"
+        style={buttonStyle}
+        title="Already recorded usage for today"
+      >
         <i className="fa fa-bookmark-o"></i>
       </div>
     );
-  } else {
+  }
+
+  const handleClick = async () => {
+    setLoading(true);
+    try {
+      const response = await postRequest(`/currently_inked/${id}/usage_record.json`);
+      if (response.ok) {
+        const json = await response.json();
+        const entry = formatter.deserialize(json);
+        if (onUsageRecorded) {
+          onUsageRecorded(entry);
+        }
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
     return (
-      <a
-        className="usage btn btn-secondary"
-        title="Record usage for today"
-        href={`/currently_inked/${id}/usage_record`}
-        data-remote="true"
-        data-method="post"
-        // Hack, until we have some global way of tracking the state
-        onClick={(event) => {
-          setDisplayAsUsed(true);
-          if (testingMode) event.preventDefault();
-        }}
-      >
-        <i className="fa fa-bookmark"></i>
-      </a>
+      <button className="btn btn-secondary" style={buttonStyle} title="Recording usage..." disabled>
+        <i className="fa fa-spin fa-spinner"></i>
+      </button>
     );
   }
+
+  return (
+    <button
+      className="btn btn-secondary"
+      style={buttonStyle}
+      title="Record usage for today"
+      onClick={handleClick}
+    >
+      <i className="fa fa-bookmark"></i>
+    </button>
+  );
 };

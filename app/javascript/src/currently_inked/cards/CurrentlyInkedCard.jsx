@@ -50,6 +50,7 @@ export const CurrentlyInkedCard = (props) => {
     pen_name,
     refillable,
     used_today,
+    onUsageRecorded,
     collected_ink: {
       color,
       micro_cluster: { macro_cluster }
@@ -115,7 +116,7 @@ export const CurrentlyInkedCard = (props) => {
         ) : null}
         <div className="fpc-currently-inked-card__footer">
           <div className="fpc-currently-inked-card__actions">
-            <UsageButton id={id} used={used_today} />
+            <UsageButton id={id} used={used_today} onUsageRecorded={onUsageRecorded} />
             {refillable && (
               <a
                 className="btn btn-secondary ms-2"

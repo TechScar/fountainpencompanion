@@ -1,10 +1,10 @@
 import React from "react";
 import { UsageButton } from "../components/UsageButton";
 
-export const ActionsCell = ({ id, refillable, ink_name, used_today }) => {
+export const ActionsCell = ({ id, refillable, ink_name, used_today, onUsageRecorded }) => {
   return (
     <div className="actions">
-      <UsageButton id={id} used={used_today} />
+      <UsageButton id={id} used={used_today} onUsageRecorded={onUsageRecorded} />
       {refillable && (
         <a
           className="btn btn-secondary"

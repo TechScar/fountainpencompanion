@@ -6,7 +6,7 @@ import { fuzzyMatch } from "../match";
 
 export const storageKeyHiddenFields = "fpc-currently-inked-cards-hidden-fields";
 
-export const CurrentlyInkedCards = ({ currentlyInked, onLayoutChange }) => {
+export const CurrentlyInkedCards = ({ currentlyInked, onLayoutChange, onUsageRecorded }) => {
   const { hiddenFields, onHiddenFieldsChange } = useHiddenFields(storageKeyHiddenFields);
   const [matchOn, setMatchOn] = useState("");
   const visible = fuzzyMatch(currentlyInked, matchOn, hiddenFields);
@@ -21,7 +21,7 @@ export const CurrentlyInkedCards = ({ currentlyInked, onLayoutChange }) => {
         hiddenFields={hiddenFields}
         onHiddenFieldsChange={onHiddenFieldsChange}
       />
-      <Cards data={visible} hiddenFields={hiddenFields} />
+      <Cards data={visible} hiddenFields={hiddenFields} onUsageRecorded={onUsageRecorded} />
     </div>
   );
 };

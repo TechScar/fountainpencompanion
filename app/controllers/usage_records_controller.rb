@@ -26,6 +26,21 @@ class UsageRecordsController < ApplicationController
       if @usage_record.save
         respond_to do |format|
           format.html { redirect_to usage_records_path, notice: "Usage record created." }
+          format.json do
+            @currently_inked.reload
+            render json:
+                     CurrentlyInkedSerializer
+                       .new(
+                         @currently_inked,
+                         include: %i[collected_ink collected_pen collected_ink.micro_cluster],
+                         fields: {
+                           micro_cluster: %i[macro_cluster]
+                         }
+                       )
+                       .serializable_hash
+                       .to_json,
+                   status: :created
+          end
           format.any { head :created }
         end
       else
