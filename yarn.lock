@@ -6322,12 +6322,10 @@ json5@^2.2.3:
   resolved "https://registry.yarnpkg.com/json5/-/json5-2.2.3.tgz#78cd6f1a19bdc12b73db5ad0c61efd66c1e29283"
   integrity sha512-XmOWe7eyHYH14cLdVPoyg+GOH3rYX++KpzrylJwSW98t3Nk+U8XOl8FWKOgwtzdb8lXGf6zYwDUzeHMWfxasyg==
 
-jsona@^1.12.1:
-  version "1.12.1"
-  resolved "https://registry.yarnpkg.com/jsona/-/jsona-1.12.1.tgz#213f8c55a3460d94179824ac83d1dfdbfa265238"
-  integrity sha512-44WL4ZdsKx//mCDPUFQtbK7mnVdHXcVzbBy7Pzy0LAgXyfpN5+q8Hum7cLUX4wTnRsClHb4eId1hePZYchwczg==
-  dependencies:
-    tslib "^2.4.1"
+jsona@^1.14.0:
+  version "1.14.0"
+  resolved "https://registry.yarnpkg.com/jsona/-/jsona-1.14.0.tgz#eb1540030f48e9cb29b50752a75270f187e0d283"
+  integrity sha512-MHtdziqemqjG4KBsFG60cITQjIOZg7xw3gJ9+Hb4tSfMewKmHstbbXM8CX291A7CdUeuSU5slu6WfHNTeOgWOg==
 
 jstz@^2.1.1:
   version "2.1.1"
@@ -8506,7 +8504,7 @@ tslib@^1.9.0:
   resolved "https://registry.yarnpkg.com/tslib/-/tslib-1.10.0.tgz#c3c19f95973fb0a62973fb09d90d961ee43e5c8a"
   integrity sha512-qOebF53frne81cf0S9B41ByenJ3/IuH8yJKngAX35CmiZySA0khhkovshKK+jGCaMnVomla7gVlIcc3EvKPbTQ==
 
-tslib@^2.1.0, tslib@^2.4.1:
+tslib@^2.1.0:
   version "2.6.0"
   resolved "https://registry.yarnpkg.com/tslib/-/tslib-2.6.0.tgz#b295854684dbda164e181d259a22cd779dcd7bc3"
   integrity sha512-7At1WUettjcSRHXCyYtTselblcHl9PJFFVKiCAy/bY97+BPZXSQ2wbq0P9s8tK2G7dFQfNnlJnPAiArVBVBsfA==
