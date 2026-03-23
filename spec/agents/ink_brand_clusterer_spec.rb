@@ -1,7 +1,6 @@
 require "rails_helper"
 
 RSpec.describe InkBrandClusterer do
-  include ActiveSupport::Testing::TimeHelpers
   before(:each) { WebMock.reset! }
 
   let(:user) { create(:user) }
@@ -11,7 +10,6 @@ RSpec.describe InkBrandClusterer do
   let!(:existing_brand_cluster) { create(:brand_cluster, name: "Existing Brand") }
   let!(:another_brand_cluster) { create(:brand_cluster, name: "Another Brand") }
 
-  # Create some collected inks to give the macro cluster some data
   let!(:collected_ink) do
     create(:collected_ink, user: user, brand_name: "Test Brand", ink_name: "Test Ink")
   end
@@ -96,34 +94,21 @@ RSpec.describe InkBrandClusterer do
   describe "#initialize" do
     it "creates agent with macro cluster" do
       clusterer = described_class.new(macro_cluster.id)
-      expect(clusterer.send(:macro_cluster)).to eq(macro_cluster)
+      expect(clusterer.agent_log.owner).to eq(macro_cluster)
+      expect(clusterer.agent_log.name).to eq("InkBrandClusterer")
+      expect(clusterer.agent_log).to be_persisted
     end
+  end
 
-    it "initializes transcript with system directive" do
-      clusterer = described_class.new(macro_cluster.id)
-      expect(clusterer.transcript.first[:system]).to be_present
-      expect(clusterer.transcript.first[:system]).to include("determine if the given ink belongs")
-      expect(clusterer.transcript.first[:system]).to include("existing brands")
-    end
+  describe "#agent_log" do
+    it "creates and memoizes agent log" do
+      log1 = subject.agent_log
+      log2 = subject.agent_log
 
-    it "includes macro cluster data in transcript" do
-      clusterer = described_class.new(macro_cluster.id)
-      user_messages = clusterer.transcript.select { |msg| msg[:user] }
-      expect(user_messages.size).to eq(2)
-
-      cluster_data = user_messages.first[:user]
-      expect(cluster_data).to include("The ink in question has the following details:")
-      expect(cluster_data).to include(macro_cluster.name)
-    end
-
-    it "includes existing brands data in transcript" do
-      clusterer = described_class.new(macro_cluster.id)
-      user_messages = clusterer.transcript.select { |msg| msg[:user] }
-
-      brands_data = user_messages.last[:user]
-      expect(brands_data).to include("The following brands are already present in the system:")
-      expect(brands_data).to include(existing_brand_cluster.name)
-      expect(brands_data).to include(another_brand_cluster.name)
+      expect(log1).to be_persisted
+      expect(log1.name).to eq("InkBrandClusterer")
+      expect(log1.owner).to eq(macro_cluster)
+      expect(log1).to eq(log2)
     end
   end
 
@@ -158,16 +143,23 @@ RSpec.describe InkBrandClusterer do
         ).at_least_once
       end
 
-      it "includes function definitions in the request" do
+      it "includes tool definitions in the request" do
         subject.perform
 
         expect(WebMock).to have_requested(
           :post,
           "https://api.openai.com/v1/chat/completions"
-        ).with { |req| JSON.parse(req.body).key?("tools") }
+        ).with { |req|
+          body = JSON.parse(req.body)
+          tools = body["tools"]
+          tool_names = tools.map { |tool| tool["function"]["name"] }
+          expect(tool_names).to include("add_to_brand_cluster")
+          expect(tool_names).to include("create_new_brand_cluster")
+          true
+        }
       end
 
-      it "assigns macro cluster to existing brand cluster when not evaluating" do
+      it "assigns macro cluster to existing brand cluster" do
         subject.perform
         macro_cluster.reload
         expect(macro_cluster.brand_cluster).to eq(existing_brand_cluster)
@@ -219,7 +211,7 @@ RSpec.describe InkBrandClusterer do
         expect(agent_log.extra_data["action"]).to eq("create_new_brand_cluster")
       end
 
-      it "creates new brand cluster and assigns macro cluster when not evaluating" do
+      it "creates new brand cluster and assigns macro cluster" do
         clusterer = described_class.new(unique_macro_cluster.id)
         initial_brand_cluster_count = BrandCluster.count
 
@@ -244,7 +236,7 @@ RSpec.describe InkBrandClusterer do
       end
 
       it "raises an error" do
-        expect { subject.perform }.to raise_error(Faraday::ServerError)
+        expect { subject.perform }.to raise_error(RubyLLM::ServerError)
       end
     end
 
@@ -265,141 +257,272 @@ RSpec.describe InkBrandClusterer do
     end
   end
 
-  describe "function validation through OpenAI responses" do
-    context "when AI calls add_to_brand_cluster with valid brand_cluster_id" do
-      before do
-        stub_request(:post, "https://api.openai.com/v1/chat/completions").to_return(
-          status: 200,
-          body: add_to_brand_cluster_response.to_json,
-          headers: {
-            "Content-Type" => "application/json"
-          }
-        )
-      end
-
-      it "processes valid brand cluster assignment" do
-        agent_log = subject.perform
-        expect(agent_log.extra_data["brand_cluster_id"]).to eq(existing_brand_cluster.id)
-      end
-    end
-
-    context "when AI calls add_to_brand_cluster with invalid brand_cluster_id" do
-      let(:invalid_response) do
-        {
-          "id" => "chatcmpl-123",
-          "object" => "chat.completion",
-          "created" => 1_677_652_288,
-          "model" => "gpt-4.1",
-          "choices" => [
-            {
-              "index" => 0,
-              "message" => {
-                "role" => "assistant",
-                "content" => "",
-                "tool_calls" => [
-                  {
-                    "id" => "call_123",
-                    "type" => "function",
-                    "function" => {
-                      "name" => "add_to_brand_cluster",
-                      "arguments" => { "brand_cluster_id" => 99_999 }.to_json
-                    }
-                  }
-                ]
-              },
-              "finish_reason" => "tool_calls"
-            }
-          ],
-          "usage" => {
-            "prompt_tokens" => 250,
-            "completion_tokens" => 30,
-            "total_tokens" => 280
-          }
-        }
-      end
-
-      before do
-        stub_request(:post, "https://api.openai.com/v1/chat/completions").to_return(
-          status: 200,
-          body: invalid_response.to_json,
-          headers: {
-            "Content-Type" => "application/json"
-          }
-        )
-      end
-
-      it "handles invalid brand cluster ID with error message" do
-        # This should trigger the validation in the function and return an error message
-        # The agent framework should handle this gracefully
-        expect { subject.perform }.not_to raise_error
-      end
-    end
-  end
-
   describe "data formatting" do
-    it "includes macro cluster data in JSON format" do
-      clusterer = described_class.new(macro_cluster.id)
-      user_messages = clusterer.transcript.select { |msg| msg[:user] }
-      cluster_data = user_messages.first[:user]
-
-      parsed_data =
-        JSON.parse(cluster_data.gsub("The ink in question has the following details: ", ""))
-      expect(parsed_data["name"]).to eq(macro_cluster.name)
-      expect(parsed_data["name_details"]).to be_an(Array)
+    before do
+      stub_request(:post, "https://api.openai.com/v1/chat/completions").to_return(
+        status: 200,
+        body: add_to_brand_cluster_response.to_json,
+        headers: {
+          "Content-Type" => "application/json"
+        }
+      )
     end
 
-    it "includes existing brands data in JSON format" do
-      clusterer = described_class.new(macro_cluster.id)
-      user_messages = clusterer.transcript.select { |msg| msg[:user] }
-      brands_data = user_messages.last[:user]
+    it "sends macro cluster data and brands data to OpenAI" do
+      subject.perform
 
-      parsed_data =
-        JSON.parse(brands_data.gsub("The following brands are already present in the system: ", ""))
-      expect(parsed_data).to be_an(Array)
-      expect(parsed_data.any? { |brand| brand["name"] == existing_brand_cluster.name }).to be true
+      expect(WebMock).to have_requested(:post, "https://api.openai.com/v1/chat/completions")
+        .with { |req|
+          body = JSON.parse(req.body)
+          content = body["messages"].find { |m| m["role"] == "user" }&.[]("content")
+
+          expect(content).to include("The ink in question has the following details:")
+          expect(content).to include(macro_cluster.name)
+          expect(content).to include("The following brands are already present in the system:")
+          expect(content).to include(existing_brand_cluster.name)
+          expect(content).to include(another_brand_cluster.name)
+
+          true
+        }
+        .at_least_once
     end
 
-    it "handles synonyms correctly" do
-      clusterer = described_class.new(macro_cluster.id)
-      user_messages = clusterer.transcript.select { |msg| msg[:user] }
-      cluster_data = user_messages.first[:user]
+    it "includes macro cluster data in valid JSON format" do
+      subject.perform
 
-      # Test that the data structure is valid JSON and includes expected fields
-      parsed_data =
-        JSON.parse(cluster_data.gsub("The ink in question has the following details: ", ""))
-      expect(parsed_data).to have_key("name")
-      expect(parsed_data).to have_key("name_details")
-      # Synonyms field is optional based on whether synonyms exist
+      expect(WebMock).to have_requested(:post, "https://api.openai.com/v1/chat/completions")
+        .with { |req|
+          body = JSON.parse(req.body)
+          content = body["messages"].find { |m| m["role"] == "user" }&.[]("content")
+
+          json_str = content.match(/The ink in question has the following details: (.+?)$/m)[1]
+          parsed_data = JSON.parse(json_str.split("\n").first)
+          expect(parsed_data["name"]).to eq(macro_cluster.name)
+          expect(parsed_data["name_details"]).to be_an(Array)
+
+          true
+        }
+        .at_least_once
     end
   end
 
-  describe "integration scenarios" do
-    context "complete brand clustering workflow" do
+  describe "tools" do
+    let(:tool_agent_log) { AgentLog.create!(name: "test", transcript: [], owner: macro_cluster) }
+
+    describe InkBrandClusterer::AddToBrandCluster do
+      it "has the correct description" do
+        tool = described_class.new(macro_cluster, tool_agent_log)
+        expect(tool.description).to eq("Add ink to the brand cluster")
+      end
+
+      it "has the correct name" do
+        tool = described_class.new(macro_cluster, tool_agent_log)
+        expect(tool.name).to eq("add_to_brand_cluster")
+      end
+
+      it "assigns to existing brand cluster and halts" do
+        tool = described_class.new(macro_cluster, tool_agent_log)
+        result = tool.call(brand_cluster_id: existing_brand_cluster.id)
+
+        expect(result).to be_a(RubyLLM::Tool::Halt)
+        expect(tool_agent_log.reload.extra_data["action"]).to eq("add_to_brand_cluster")
+        expect(tool_agent_log.extra_data["brand_cluster_id"]).to eq(existing_brand_cluster.id)
+        expect(macro_cluster.reload.brand_cluster).to eq(existing_brand_cluster)
+      end
+
+      it "returns error message for invalid brand_cluster_id" do
+        tool = described_class.new(macro_cluster, tool_agent_log)
+        result = tool.call(brand_cluster_id: 99_999)
+
+        expect(result).to eq("This brand_cluster_id does not exist. Please try again.")
+        expect(macro_cluster.reload.brand_cluster).to be_nil
+      end
+    end
+
+    describe InkBrandClusterer::CreateNewBrandCluster do
+      it "has the correct description" do
+        tool = described_class.new(macro_cluster, tool_agent_log)
+        expect(tool.description).to eq("Create a new brand cluster")
+      end
+
+      it "has the correct name" do
+        tool = described_class.new(macro_cluster, tool_agent_log)
+        expect(tool.name).to eq("create_new_brand_cluster")
+      end
+
+      it "creates new brand cluster and halts" do
+        tool = described_class.new(macro_cluster, tool_agent_log)
+
+        expect { tool.call({}) }.to change { BrandCluster.count }.by(1)
+
+        result = BrandCluster.last
+        expect(macro_cluster.reload.brand_cluster).to eq(result)
+        expect(tool_agent_log.reload.extra_data["action"]).to eq("create_new_brand_cluster")
+      end
+    end
+  end
+
+  describe "transcript restoration" do
+    let(:existing_transcript) do
+      [
+        { "role" => "developer", "content" => "Your task is to determine..." },
+        { "role" => "user", "content" => "The ink in question has the following details..." },
+        {
+          "role" => "assistant",
+          "content" => "",
+          "tool_calls" => [
+            {
+              "id" => "call_prev",
+              "name" => "add_to_brand_cluster",
+              "arguments" => {
+                "brand_cluster_id" => existing_brand_cluster.id
+              }
+            }
+          ]
+        },
+        {
+          "role" => "tool",
+          "content" => "Added to brand cluster Existing Brand",
+          "tool_call_id" => "call_prev"
+        }
+      ]
+    end
+
+    let(:continued_response) do
+      {
+        "id" => "chatcmpl-continued",
+        "object" => "chat.completion",
+        "created" => 1_677_652_288,
+        "model" => "gpt-4.1",
+        "choices" => [
+          {
+            "index" => 0,
+            "message" => {
+              "role" => "assistant",
+              "content" => "",
+              "tool_calls" => [
+                {
+                  "id" => "call_new",
+                  "type" => "function",
+                  "function" => {
+                    "name" => "add_to_brand_cluster",
+                    "arguments" => { "brand_cluster_id" => existing_brand_cluster.id }.to_json
+                  }
+                }
+              ]
+            },
+            "finish_reason" => "tool_calls"
+          }
+        ],
+        "usage" => {
+          "prompt_tokens" => 100,
+          "completion_tokens" => 50,
+          "total_tokens" => 150
+        }
+      }
+    end
+
+    before do
+      stub_request(:post, "https://api.openai.com/v1/chat/completions").to_return(
+        status: 200,
+        body: continued_response.to_json,
+        headers: {
+          "Content-Type" => "application/json"
+        }
+      )
+    end
+
+    it "restores messages including tool calls from an existing transcript" do
+      agent_log =
+        macro_cluster.agent_logs.create!(
+          name: "InkBrandClusterer",
+          state: "processing",
+          transcript: existing_transcript
+        )
+
+      clusterer = described_class.new(macro_cluster.id)
+      clusterer.instance_variable_set(:@agent_log, agent_log)
+
+      clusterer.perform
+
+      expect(WebMock).to have_requested(
+        :post,
+        "https://api.openai.com/v1/chat/completions"
+      ).with { |req|
+        body = JSON.parse(req.body)
+        messages = body["messages"]
+
+        user_restored =
+          messages.find do |m|
+            m["role"] == "user" &&
+              m["content"]&.include?("The ink in question has the following details")
+          end
+        assistant_restored = messages.find { |m| m["role"] == "assistant" && m["tool_calls"]&.any? }
+        tool_restored =
+          messages.find { |m| m["role"] == "tool" && m["tool_call_id"] == "call_prev" }
+
+        user_restored && assistant_restored && tool_restored &&
+          assistant_restored["tool_calls"].first["id"] == "call_prev"
+      }
+    end
+  end
+
+  describe "transcript and usage tracking" do
+    before do
+      stub_request(:post, "https://api.openai.com/v1/chat/completions").to_return(
+        status: 200,
+        body: add_to_brand_cluster_response.to_json,
+        headers: {
+          "Content-Type" => "application/json"
+        }
+      )
+    end
+
+    it "updates agent log transcript" do
+      subject.perform
+
+      transcript = subject.agent_log.transcript
+      expect(transcript).to be_an(Array)
+      expect(transcript.length).to be >= 3
+      expect(transcript.any? { |e| e["role"] == "user" }).to be true
+      expect(transcript.any? { |e| e["role"] == "assistant" }).to be true
+    end
+
+    it "updates agent log usage" do
+      subject.perform
+
+      usage = subject.agent_log.usage
+      expect(usage["prompt_tokens"]).to eq(300)
+      expect(usage["completion_tokens"]).to eq(50)
+      expect(usage["total_tokens"]).to eq(350)
+      expect(usage["model"]).to eq("gpt-4.1")
+    end
+  end
+
+  describe "edge cases" do
+    context "when no existing brand clusters exist" do
       before do
+        BrandCluster.destroy_all
         stub_request(:post, "https://api.openai.com/v1/chat/completions").to_return(
           status: 200,
-          body: add_to_brand_cluster_response.to_json,
+          body: create_new_brand_cluster_response.to_json,
           headers: {
             "Content-Type" => "application/json"
           }
         )
       end
 
-      it "completes full brand clustering workflow" do
-        expect { subject.perform }.to change { AgentLog.count }.by(1)
+      it "handles empty brand cluster list" do
+        subject.perform
 
-        agent_log = AgentLog.last
-        expect(agent_log.name).to eq("InkBrandClusterer")
-        expect(agent_log.state).to eq("waiting-for-approval")
-        expect(agent_log.owner).to eq(macro_cluster)
-        expect(agent_log.extra_data["action"]).to eq("add_to_brand_cluster")
-        expect(agent_log.extra_data["brand_cluster_id"]).to eq(existing_brand_cluster.id)
-
-        # Verify at least one request was made to OpenAI
-        expect(WebMock).to have_requested(
-          :post,
-          "https://api.openai.com/v1/chat/completions"
-        ).at_least_once
+        expect(WebMock).to have_requested(:post, "https://api.openai.com/v1/chat/completions")
+          .with { |req|
+            body = JSON.parse(req.body)
+            content = body["messages"].find { |m| m["role"] == "user" }&.[]("content")
+            expect(content).to include("The following brands are already present in the system: []")
+            true
+          }
+          .at_least_once
       end
     end
 
@@ -434,60 +557,33 @@ RSpec.describe InkBrandClusterer do
     end
   end
 
-  describe "edge cases" do
-    context "when no existing brand clusters exist" do
+  describe "integration scenarios" do
+    context "complete brand clustering workflow" do
       before do
-        BrandCluster.destroy_all
         stub_request(:post, "https://api.openai.com/v1/chat/completions").to_return(
           status: 200,
-          body: create_new_brand_cluster_response.to_json,
+          body: add_to_brand_cluster_response.to_json,
           headers: {
             "Content-Type" => "application/json"
           }
         )
       end
 
-      it "handles empty brand cluster list" do
-        clusterer = described_class.new(macro_cluster.id)
-        user_messages = clusterer.transcript.select { |msg| msg[:user] }
-        brands_data = user_messages.last[:user]
+      it "completes full brand clustering workflow" do
+        expect { subject.perform }.to change { AgentLog.count }.by(1)
 
-        parsed_data =
-          JSON.parse(
-            brands_data.gsub("The following brands are already present in the system: ", "")
-          )
-        expect(parsed_data).to eq([])
+        agent_log = AgentLog.last
+        expect(agent_log.name).to eq("InkBrandClusterer")
+        expect(agent_log.state).to eq("waiting-for-approval")
+        expect(agent_log.owner).to eq(macro_cluster)
+        expect(agent_log.extra_data["action"]).to eq("add_to_brand_cluster")
+        expect(agent_log.extra_data["brand_cluster_id"]).to eq(existing_brand_cluster.id)
 
-        expect { clusterer.perform }.not_to raise_error
+        expect(WebMock).to have_requested(
+          :post,
+          "https://api.openai.com/v1/chat/completions"
+        ).at_least_once
       end
-    end
-  end
-
-  describe "state management" do
-    before do
-      stub_request(:post, "https://api.openai.com/v1/chat/completions").to_return(
-        status: 200,
-        body: add_to_brand_cluster_response.to_json,
-        headers: {
-          "Content-Type" => "application/json"
-        }
-      )
-    end
-
-    it "tracks agent log state through workflow" do
-      agent_log = subject.perform
-
-      expect(agent_log.state).to eq("waiting-for-approval")
-      expect(agent_log.owner).to eq(macro_cluster)
-      expect(agent_log.name).to eq("InkBrandClusterer")
-    end
-
-    it "maintains extra_data through workflow" do
-      agent_log = subject.perform
-
-      expect(agent_log.extra_data).to be_present
-      expect(agent_log.extra_data["action"]).to eq("add_to_brand_cluster")
-      expect(agent_log.extra_data["brand_cluster_id"]).to eq(existing_brand_cluster.id)
     end
   end
 end

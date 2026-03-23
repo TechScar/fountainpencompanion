@@ -1,7 +1,54 @@
 class InkBrandClusterer
-  include Raix::ChatCompletion
-  include Raix::FunctionDispatch
-  include AgentTranscript
+  include RubyLlmAgent
+
+  class AddToBrandCluster < RubyLLM::Tool
+    description "Add ink to the brand cluster"
+
+    def name = "add_to_brand_cluster"
+
+    param :brand_cluster_id, type: "integer", desc: "The ID of the brand cluster to add the ink to"
+
+    attr_accessor :macro_cluster, :agent_log
+
+    def initialize(macro_cluster, agent_log)
+      self.macro_cluster = macro_cluster
+      self.agent_log = agent_log
+    end
+
+    def execute(brand_cluster_id:)
+      brand_cluster = BrandCluster.find_by(id: brand_cluster_id)
+
+      return "This brand_cluster_id does not exist. Please try again." unless brand_cluster
+
+      UpdateBrandCluster.new(macro_cluster, brand_cluster).perform
+      agent_log.update!(
+        extra_data: {
+          action: "add_to_brand_cluster",
+          brand_cluster_id: brand_cluster.id
+        }
+      )
+      halt "Added to brand cluster #{brand_cluster.name}"
+    end
+  end
+
+  class CreateNewBrandCluster < RubyLLM::Tool
+    description "Create a new brand cluster"
+
+    def name = "create_new_brand_cluster"
+
+    attr_accessor :macro_cluster, :agent_log
+
+    def initialize(macro_cluster, agent_log)
+      self.macro_cluster = macro_cluster
+      self.agent_log = agent_log
+    end
+
+    def execute
+      CreateBrandCluster.new(macro_cluster).perform
+      agent_log.update!(extra_data: { action: "create_new_brand_cluster" })
+      halt "Created new brand cluster"
+    end
+  end
 
   SYSTEM_DIRECTIVE = <<~TEXT
     Your task is to determine if the given ink belongs to one of the existing
@@ -23,23 +70,34 @@ class InkBrandClusterer
 
   def initialize(macro_cluster_id)
     self.macro_cluster = MacroCluster.find(macro_cluster_id)
-    transcript << { system: SYSTEM_DIRECTIVE }
-    transcript << { user: macro_cluster_data }
-    transcript << { user: brands_data }
   end
 
   def perform
-    chat_completion(openai: "gpt-4.1")
+    ask(user_prompt)
     agent_log.waiting_for_approval!
     agent_log
+  end
+
+  def agent_log
+    @agent_log ||= macro_cluster.agent_logs.create!(name: self.class.name, transcript: [])
   end
 
   private
 
   attr_accessor :macro_cluster
 
-  def agent_log
-    @agent_log ||= macro_cluster.agent_logs.create!(name: self.class.name, transcript: [])
+  def model_id = "gpt-4.1"
+  def system_directive = SYSTEM_DIRECTIVE
+
+  def tools
+    [
+      AddToBrandCluster.new(macro_cluster, agent_log),
+      CreateNewBrandCluster.new(macro_cluster, agent_log)
+    ]
+  end
+
+  def user_prompt
+    "#{macro_cluster_data}\n\n#{brands_data}"
   end
 
   def macro_cluster_data
@@ -63,32 +121,5 @@ class InkBrandClusterer
         end
 
     "The following brands are already present in the system: #{data.to_json}"
-  end
-
-  function :add_to_brand_cluster,
-           "Add ink to the brand cluster",
-           brand_cluster_id: {
-             type: "integer"
-           } do |arguments|
-    brand_cluster_id = arguments[:brand_cluster_id]
-    brand_cluster = BrandCluster.find_by(id: brand_cluster_id)
-
-    next "This brand_cluster_id does not exist. Please try again." unless brand_cluster
-
-    UpdateBrandCluster.new(macro_cluster, brand_cluster).perform
-    stop_tool_calls_and_respond!
-    agent_log.update!(
-      extra_data: {
-        action: "add_to_brand_cluster",
-        brand_cluster_id: brand_cluster.id
-      }
-    )
-  end
-
-  function :create_new_brand_cluster, "Create a new brand cluster" do
-    CreateBrandCluster.new(macro_cluster).perform
-
-    stop_tool_calls_and_respond!
-    agent_log.update!(extra_data: { action: "create_new_brand_cluster" })
   end
 end
