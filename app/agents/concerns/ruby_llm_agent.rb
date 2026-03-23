@@ -56,11 +56,18 @@ module RubyLlmAgent
     "OPEN_AI_#{self.class.name.underscore.upcase}_TOKEN"
   end
 
+  MAX_TOOL_CALLS = 50
+
   # Multiple saves per round-trip are intentional: we save after each
   # interaction so the agent log reflects progress incrementally.
   def register_callbacks(c)
+    @tool_call_count = 0
     c.on_end_message { |message| save_transcript_and_usage(message) }
-    c.on_tool_call { save_transcript }
+    c.on_tool_call do
+      @tool_call_count += 1
+      raise "Max tool calls (#{MAX_TOOL_CALLS}) exceeded" if @tool_call_count > MAX_TOOL_CALLS
+      save_transcript
+    end
   end
 
   def save_transcript_and_usage(message)

@@ -3,37 +3,17 @@ require "rails_helper"
 describe ClassifyUser do
   let(:user) { create(:user) }
 
-  context "user classified as spam" do
-    before do
-      allow_any_instance_of(SpamClassifier).to receive(:perform)
-      allow_any_instance_of(SpamClassifier).to receive(:spam?).and_return(true)
-      described_class.new.perform(user.id)
-      user.reload
-    end
+  it "runs the spam classifier for the user" do
+    agent = instance_double(SpamClassifier)
+    allow(SpamClassifier).to receive(:new).with(user).and_return(agent)
+    allow(agent).to receive(:perform)
 
-    it "sets the spam boolean to true" do
-      expect(user.spam).to eq(true)
-    end
+    described_class.new.perform(user.id)
 
-    it "sets the spam_reason correctly" do
-      expect(user.spam_reason).to eq("auto-spam")
-    end
+    expect(agent).to have_received(:perform)
   end
 
-  context "user not classified as spam" do
-    before do
-      allow_any_instance_of(SpamClassifier).to receive(:perform)
-      allow_any_instance_of(SpamClassifier).to receive(:spam?).and_return(false)
-      described_class.new.perform(user.id)
-      user.reload
-    end
-
-    it "sets the spam boolean to true" do
-      expect(user.spam).to eq(false)
-    end
-
-    it "sets the spam_reason correctly" do
-      expect(user.spam_reason).to eq("auto-not-spam")
-    end
+  it "does nothing if the user does not exist" do
+    expect { described_class.new.perform(-1) }.not_to raise_error
   end
 end

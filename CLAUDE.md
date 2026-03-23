@@ -158,9 +158,100 @@ spec/
 ## Key Conventions
 
 - **New code should be well-structured and thoroughly tested.** Existing code quality varies; don't model new additions after poorly-tested older code.
-- **Ruby**: snake_case for methods/variables, CamelCase for classes/modules. Rescue specific errors only.
+- **Ruby**: snake_case for methods/variables, CamelCase for classes/modules. Rescue specific errors only. Prefer `attr_accessor` with `self.x =` in constructors over bare `@x` instance variables.
 - **JavaScript/JSX**: PascalCase for components, camelCase for variables/functions. Tests use `*.spec.js(x)` extension.
 - **Commits**: lint-staged runs Prettier and ESLint on staged files via Husky pre-commit hook.
+
+## AI Agents (RubyLLM)
+
+AI agents live in `app/agents/` and use the `RubyLlmAgent` concern (`app/agents/concerns/ruby_llm_agent.rb`). Some older agents still use raix and are being migrated — do not use raix for new agents.
+
+### Agent structure
+
+An agent includes `RubyLlmAgent` and must implement four methods:
+
+- `agent_log` (public) — returns or creates an `AgentLog` instance
+- `model_id` (private) — e.g., `"gpt-4.1"` or `"gpt-4.1-mini"`
+- `system_directive` (private) — the system prompt string
+- `tools` (private) — array of `RubyLLM::Tool` instances (can be empty)
+
+Use `ask(prompt)` in `perform` to send a user message and get a completion. The concern handles transcript saving, usage tracking, and transcript restoration automatically.
+
+### Tool structure
+
+Tools are defined as inner classes inheriting from `RubyLLM::Tool`:
+
+```ruby
+class MyTool < RubyLLM::Tool
+  description "What this tool does"
+
+  def name = "my_tool" # Required — auto-generated name includes module prefix for inner classes
+
+  param :some_param, desc: "Description" # string (default)
+  param :other_param, type: "integer", desc: "Description" # integer
+
+  attr_accessor :some_dep, :other_dep
+
+  def initialize(some_dep, other_dep)
+    self.some_dep = some_dep
+    self.other_dep = other_dep
+  end
+
+  def execute(some_param:, other_param:)
+    # Do work...
+    halt "result message" # Stops the conversation loop
+    # Or return a string to let the LLM continue (e.g., for error/retry)
+  end
+end
+```
+
+Key points:
+
+- Always override `def name` — the auto-generated name includes module prefixes for inner classes
+- `halt "message"` stops the tool call loop; returning a plain string sends it back to the LLM
+- Tools with no parameters: omit `param` declarations and define `execute` with no arguments
+- Pass dependencies (owner objects, agent_log) via the constructor
+
+### agent_log patterns
+
+Top-level agents create their own log:
+
+```ruby
+def agent_log
+  @agent_log ||= owner.agent_logs.create!(name: self.class.name, transcript: [])
+end
+```
+
+Sub-agents (called by other agents) use `parent_agent_log:` and find-or-create for transcript restoration:
+
+```ruby
+def agent_log
+  @agent_log ||= parent_agent_log.agent_logs.processing.where(name: self.class.name).first
+  @agent_log ||= parent_agent_log.agent_logs.create!(name: self.class.name, transcript: [])
+end
+```
+
+### Invocation
+
+Agents are invoked from Sidekiq workers, typically via the generic `RunAgent` worker:
+
+```ruby
+RunAgent.perform_async("InkBrandClusterer", macro_cluster.id)
+```
+
+Which calls `InkBrandClusterer.new(macro_cluster.id).perform`.
+
+### Testing
+
+Agent specs use WebMock to stub `https://api.openai.com/v1/chat/completions`. Key test areas:
+
+- **Tool unit tests**: instantiate tools directly, call `.call(args)`, assert on `RubyLLM::Tool::Halt` return and side effects
+- **Integration tests**: stub API responses with tool_calls, verify agent_log state and extra_data
+- **Data formatting**: use WebMock request body assertions to verify prompt content
+- **Transcript/usage**: verify `agent_log.transcript` and `agent_log.usage` are populated
+- **Error handling**: `RubyLLM::ServerError` for 500s, `Faraday::ParsingError` for malformed JSON
+
+See `spec/agents/spam_classifier_spec.rb` or `spec/agents/ink_brand_clusterer_spec.rb` for reference.
 
 ## CI
 
