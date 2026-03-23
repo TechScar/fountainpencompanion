@@ -73,6 +73,75 @@ RSpec.describe WebPageSummarizer do
     end
   end
 
+  describe "transcript restoration" do
+    let(:existing_transcript) do
+      [
+        { "role" => "developer", "content" => "You will be given the raw HTML of a web page." },
+        { "role" => "user", "content" => "<html><body>Original HTML</body></html>" },
+        { "role" => "assistant", "content" => "Previous summary attempt" }
+      ]
+    end
+    let(:continued_response) do
+      {
+        "id" => "chatcmpl-continued",
+        "object" => "chat.completion",
+        "created" => 1_677_652_288,
+        "model" => "gpt-4.1-mini",
+        "choices" => [
+          {
+            "index" => 0,
+            "message" => {
+              "role" => "assistant",
+              "content" => "Continued summary"
+            },
+            "finish_reason" => "stop"
+          }
+        ],
+        "usage" => {
+          "prompt_tokens" => 100,
+          "completion_tokens" => 50,
+          "total_tokens" => 150
+        }
+      }
+    end
+
+    before do
+      stub_request(:post, "https://api.openai.com/v1/chat/completions").to_return(
+        status: 200,
+        body: continued_response.to_json,
+        headers: {
+          "Content-Type" => "application/json"
+        }
+      )
+    end
+
+    it "restores messages from an existing agent log transcript" do
+      parent_agent_log.agent_logs.create!(
+        name: "WebPageSummarizer",
+        state: "processing",
+        transcript: existing_transcript
+      )
+
+      summarizer = described_class.new(parent_agent_log, raw_html)
+      summarizer.perform
+
+      expect(WebMock).to have_requested(
+        :post,
+        "https://api.openai.com/v1/chat/completions"
+      ).with { |req|
+        body = JSON.parse(req.body)
+        messages = body["messages"]
+
+        # Should have: developer (system), user (restored), assistant (restored), user (new ask)
+        messages.length == 4 && messages[0]["role"] == "developer" &&
+          messages[1]["role"] == "user" &&
+          messages[1]["content"] == "<html><body>Original HTML</body></html>" &&
+          messages[2]["role"] == "assistant" &&
+          messages[2]["content"] == "Previous summary attempt" && messages[3]["role"] == "user"
+      }
+    end
+  end
+
   describe "#perform" do
     let(:successful_response) do
       {

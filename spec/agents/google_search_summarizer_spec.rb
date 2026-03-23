@@ -57,6 +57,114 @@ RSpec.describe GoogleSearchSummarizer do
       expect(log1.owner).to eq(parent_agent_log)
       expect(log1).to eq(log2)
     end
+
+    it "finds existing processing agent log if it exists" do
+      existing_log =
+        parent_agent_log.agent_logs.create!(
+          name: "GoogleSearchSummarizer",
+          state: "processing",
+          transcript: []
+        )
+
+      expect(subject.agent_log).to eq(existing_log)
+    end
+  end
+
+  describe "transcript restoration" do
+    let(:existing_transcript) do
+      [
+        { "role" => "developer", "content" => "You are tasked with summarizing..." },
+        { "role" => "user", "content" => "The search was done for: test ink" },
+        {
+          "role" => "assistant",
+          "content" => "",
+          "tool_calls" => [
+            {
+              "id" => "call_prev",
+              "name" => "summarize_search_results",
+              "arguments" => {
+                "summary" => "Previous summary"
+              }
+            }
+          ]
+        },
+        { "role" => "tool", "content" => "Previous summary", "tool_call_id" => "call_prev" }
+      ]
+    end
+    let(:continued_response) do
+      {
+        "id" => "chatcmpl-continued",
+        "object" => "chat.completion",
+        "created" => 1_677_652_288,
+        "model" => "gpt-4.1-mini",
+        "choices" => [
+          {
+            "index" => 0,
+            "message" => {
+              "role" => "assistant",
+              "content" => "",
+              "tool_calls" => [
+                {
+                  "id" => "call_new",
+                  "type" => "function",
+                  "function" => {
+                    "name" => "summarize_search_results",
+                    "arguments" => { "summary" => "Updated summary" }.to_json
+                  }
+                }
+              ]
+            },
+            "finish_reason" => "tool_calls"
+          }
+        ],
+        "usage" => {
+          "prompt_tokens" => 100,
+          "completion_tokens" => 50,
+          "total_tokens" => 150
+        }
+      }
+    end
+
+    before do
+      stub_request(:post, "https://api.openai.com/v1/chat/completions").to_return(
+        status: 200,
+        body: continued_response.to_json,
+        headers: {
+          "Content-Type" => "application/json"
+        }
+      )
+    end
+
+    it "restores messages including tool calls from an existing transcript" do
+      parent_agent_log.agent_logs.create!(
+        name: "GoogleSearchSummarizer",
+        state: "processing",
+        transcript: existing_transcript
+      )
+
+      subject.perform
+
+      expect(WebMock).to have_requested(
+        :post,
+        "https://api.openai.com/v1/chat/completions"
+      ).with { |req|
+        body = JSON.parse(req.body)
+        messages = body["messages"]
+
+        # Should have: developer, user (restored), assistant with tool_calls (restored),
+        #              tool result (restored), user (new ask)
+        user_restored =
+          messages.find do |m|
+            m["role"] == "user" && m["content"] == "The search was done for: test ink"
+          end
+        assistant_restored = messages.find { |m| m["role"] == "assistant" && m["tool_calls"]&.any? }
+        tool_restored =
+          messages.find { |m| m["role"] == "tool" && m["tool_call_id"] == "call_prev" }
+
+        user_restored && assistant_restored && tool_restored &&
+          assistant_restored["tool_calls"].first["id"] == "call_prev"
+      }
+    end
   end
 
   describe "#perform" do
