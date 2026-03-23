@@ -34,37 +34,6 @@ RSpec.describe WebPageSummarizer do
       expect(summarizer.send(:parent_agent_log)).to eq(parent_agent_log)
       expect(summarizer.send(:raw_html)).to eq(raw_html)
     end
-
-    it "initializes transcript with system directive" do
-      summarizer = described_class.new(parent_agent_log, raw_html)
-      expect(summarizer.transcript.first[:system]).to be_present
-      expect(summarizer.transcript.first[:system]).to include("raw HTML of a web page")
-      expect(summarizer.transcript.first[:system]).to include("summary should include")
-      expect(summarizer.transcript.first[:system]).to include("title, description")
-    end
-
-    it "adds raw HTML to transcript as user message" do
-      summarizer = described_class.new(parent_agent_log, raw_html)
-      user_message = summarizer.transcript.find { |msg| msg[:user] }
-      expect(user_message[:user]).to eq(raw_html)
-    end
-
-    context "when agent_log already has transcript" do
-      let(:existing_transcript) do
-        [{ system: "Existing system message" }, { user: "Existing user message" }]
-      end
-
-      before do
-        allow_any_instance_of(described_class).to receive(:agent_log).and_return(
-          double("agent_log", transcript: existing_transcript)
-        )
-      end
-
-      it "uses existing transcript instead of creating new one" do
-        summarizer = described_class.new(parent_agent_log, raw_html)
-        expect(summarizer.transcript.first[:system]).to eq("Existing system message")
-      end
-    end
   end
 
   describe "#agent_log" do
@@ -101,6 +70,75 @@ RSpec.describe WebPageSummarizer do
       expect(new_log).to be_persisted
       expect(new_log.state).to eq("processing")
       expect(new_log).not_to eq(parent_agent_log.agent_logs.first)
+    end
+  end
+
+  describe "transcript restoration" do
+    let(:existing_transcript) do
+      [
+        { "role" => "developer", "content" => "You will be given the raw HTML of a web page." },
+        { "role" => "user", "content" => "<html><body>Original HTML</body></html>" },
+        { "role" => "assistant", "content" => "Previous summary attempt" }
+      ]
+    end
+    let(:continued_response) do
+      {
+        "id" => "chatcmpl-continued",
+        "object" => "chat.completion",
+        "created" => 1_677_652_288,
+        "model" => "gpt-4.1-mini",
+        "choices" => [
+          {
+            "index" => 0,
+            "message" => {
+              "role" => "assistant",
+              "content" => "Continued summary"
+            },
+            "finish_reason" => "stop"
+          }
+        ],
+        "usage" => {
+          "prompt_tokens" => 100,
+          "completion_tokens" => 50,
+          "total_tokens" => 150
+        }
+      }
+    end
+
+    before do
+      stub_request(:post, "https://api.openai.com/v1/chat/completions").to_return(
+        status: 200,
+        body: continued_response.to_json,
+        headers: {
+          "Content-Type" => "application/json"
+        }
+      )
+    end
+
+    it "restores messages from an existing agent log transcript" do
+      parent_agent_log.agent_logs.create!(
+        name: "WebPageSummarizer",
+        state: "processing",
+        transcript: existing_transcript
+      )
+
+      summarizer = described_class.new(parent_agent_log, raw_html)
+      summarizer.perform
+
+      expect(WebMock).to have_requested(
+        :post,
+        "https://api.openai.com/v1/chat/completions"
+      ).with { |req|
+        body = JSON.parse(req.body)
+        messages = body["messages"]
+
+        # Should have: developer (system), user (restored), assistant (restored), user (new ask)
+        messages.length == 4 && messages[0]["role"] == "developer" &&
+          messages[1]["role"] == "user" &&
+          messages[1]["content"] == "<html><body>Original HTML</body></html>" &&
+          messages[2]["role"] == "assistant" &&
+          messages[2]["content"] == "Previous summary attempt" && messages[3]["role"] == "user"
+      }
     end
   end
 
@@ -156,7 +194,7 @@ RSpec.describe WebPageSummarizer do
         .with { |req|
           body = JSON.parse(req.body)
           messages = body["messages"]
-          system_msg = messages.find { |msg| msg["role"] == "system" }
+          system_msg = messages.find { |msg| msg["role"] == "system" || msg["role"] == "developer" }
           user_msg = messages.find { |msg| msg["role"] == "user" }
 
           system_msg&.dig("content")&.include?("raw HTML of a web page") &&
@@ -177,6 +215,27 @@ RSpec.describe WebPageSummarizer do
       expect(result).to be_a(String)
       expect(result).to include("Pilot Iroshizuku Kon-peki Review")
       expect(result).to include("deep azure blue ink")
+    end
+
+    it "updates agent log transcript" do
+      subject.perform
+
+      transcript = subject.agent_log.transcript
+      expect(transcript).to be_an(Array)
+      expect(transcript.length).to be >= 3
+      expect(transcript.first["role"]).to eq("system")
+      expect(transcript.any? { |e| e["role"] == "user" }).to be true
+      expect(transcript.any? { |e| e["role"] == "assistant" }).to be true
+    end
+
+    it "updates agent log usage" do
+      subject.perform
+
+      usage = subject.agent_log.usage
+      expect(usage["prompt_tokens"]).to eq(200)
+      expect(usage["completion_tokens"]).to eq(100)
+      expect(usage["total_tokens"]).to eq(300)
+      expect(usage["model"]).to eq("gpt-4.1-mini")
     end
   end
 
@@ -263,12 +322,12 @@ RSpec.describe WebPageSummarizer do
       before do
         stub_request(:post, "https://api.openai.com/v1/chat/completions").to_return(
           status: 500,
-          body: { error: { message: "Internal server error" } }.to_json
+          body: "Internal Server Error"
         )
       end
 
       it "raises an error" do
-        expect { subject.perform }.to raise_error(Faraday::ServerError)
+        expect { subject.perform }.to raise_error(RubyLLM::ServerError)
       end
     end
 
@@ -285,22 +344,6 @@ RSpec.describe WebPageSummarizer do
 
       it "raises a parsing error" do
         expect { subject.perform }.to raise_error(Faraday::ParsingError)
-      end
-    end
-
-    context "when OpenAI returns unexpected response format" do
-      before do
-        stub_request(:post, "https://api.openai.com/v1/chat/completions").to_return(
-          status: 200,
-          body: { "id" => "chatcmpl-test", "choices" => [] }.to_json,
-          headers: {
-            "Content-Type" => "application/json"
-          }
-        )
-      end
-
-      it "handles response without choices gracefully" do
-        expect { subject.perform }.to raise_error(NoMethodError)
       end
     end
 
@@ -368,11 +411,6 @@ RSpec.describe WebPageSummarizer do
         expect(summarizer.agent_log.reload.state).to eq("waiting-for-approval")
         expect(summarizer.agent_log.owner).to eq(parent_agent_log)
         expect(summarizer.agent_log.name).to eq("WebPageSummarizer")
-
-        # Verify transcript was updated
-        expect(summarizer.transcript.count).to be >= 2
-        expect(summarizer.transcript.any? { |msg| msg[:system] }).to be true
-        expect(summarizer.transcript.any? { |msg| msg[:user] }).to be true
       end
     end
 
