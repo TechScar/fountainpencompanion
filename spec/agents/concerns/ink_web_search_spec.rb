@@ -28,10 +28,8 @@ describe InkWebSearch do
   end
 
   let(:test_instance) { test_class.new }
-  let(:mock_google_search) { double("GoogleSearch") }
   let(:mock_google_search_summarizer) { double("GoogleSearchSummarizer") }
   let(:mock_agent_log) { double("AgentLog") }
-  let(:search_results) { %w[result1 result2 result3] }
   let(:search_summary) { "Summary of search results about fountain pen ink" }
 
   describe "#agent_log" do
@@ -47,8 +45,6 @@ describe InkWebSearch do
 
     describe "search_web function" do
       before do
-        allow(GoogleSearch).to receive(:new).and_return(mock_google_search)
-        allow(mock_google_search).to receive(:perform).and_return(search_results)
         allow(GoogleSearchSummarizer).to receive(:new).and_return(mock_google_search_summarizer)
         allow(mock_google_search_summarizer).to receive(:perform).and_return(search_summary)
         allow(test_instance).to receive(:agent_log).and_return(mock_agent_log)
@@ -67,19 +63,10 @@ describe InkWebSearch do
       it "appends ' ink' to the search query" do
         test_instance.call_function(:search_web, { search_query: "pilot iroshizuku" })
 
-        expect(GoogleSearch).to have_received(:new).with("pilot iroshizuku ink")
-      end
-
-      it "creates GoogleSearch instance with modified query" do
-        test_instance.call_function(:search_web, { search_query: "fountain pen blue" })
-
-        expect(GoogleSearch).to have_received(:new).with("fountain pen blue ink")
-      end
-
-      it "calls perform on GoogleSearch instance" do
-        test_instance.call_function(:search_web, { search_query: "test query" })
-
-        expect(mock_google_search).to have_received(:perform)
+        expect(GoogleSearchSummarizer).to have_received(:new).with(
+          "pilot iroshizuku ink",
+          parent_agent_log: mock_agent_log
+        )
       end
 
       it "creates GoogleSearchSummarizer with correct parameters" do
@@ -87,8 +74,7 @@ describe InkWebSearch do
 
         expect(GoogleSearchSummarizer).to have_received(:new).with(
           "diamine ink",
-          search_results,
-          mock_agent_log
+          parent_agent_log: mock_agent_log
         )
       end
 
@@ -109,7 +95,10 @@ describe InkWebSearch do
         it "handles single word queries" do
           result = test_instance.call_function(:search_web, { search_query: "waterman" })
 
-          expect(GoogleSearch).to have_received(:new).with("waterman ink")
+          expect(GoogleSearchSummarizer).to have_received(:new).with(
+            "waterman ink",
+            parent_agent_log: mock_agent_log
+          )
           expect(result).to include("The search results for 'waterman ink' are:")
         end
 
@@ -117,66 +106,41 @@ describe InkWebSearch do
           result =
             test_instance.call_function(:search_web, { search_query: "montblanc mystery black" })
 
-          expect(GoogleSearch).to have_received(:new).with("montblanc mystery black ink")
+          expect(GoogleSearchSummarizer).to have_received(:new).with(
+            "montblanc mystery black ink",
+            parent_agent_log: mock_agent_log
+          )
           expect(result).to include("The search results for 'montblanc mystery black ink' are:")
         end
 
         it "handles queries with special characters" do
           result = test_instance.call_function(:search_web, { search_query: "pilot iro-shizuku" })
 
-          expect(GoogleSearch).to have_received(:new).with("pilot iro-shizuku ink")
+          expect(GoogleSearchSummarizer).to have_received(:new).with(
+            "pilot iro-shizuku ink",
+            parent_agent_log: mock_agent_log
+          )
           expect(result).to include("The search results for 'pilot iro-shizuku ink' are:")
         end
 
         it "handles empty search query" do
           result = test_instance.call_function(:search_web, { search_query: "" })
 
-          expect(GoogleSearch).to have_received(:new).with(" ink")
+          expect(GoogleSearchSummarizer).to have_received(:new).with(
+            " ink",
+            parent_agent_log: mock_agent_log
+          )
           expect(result).to include("The search results for ' ink' are:")
         end
 
         it "handles queries with leading/trailing whitespace" do
           result = test_instance.call_function(:search_web, { search_query: "  pilot  " })
 
-          expect(GoogleSearch).to have_received(:new).with("  pilot   ink")
+          expect(GoogleSearchSummarizer).to have_received(:new).with(
+            "  pilot   ink",
+            parent_agent_log: mock_agent_log
+          )
           expect(result).to include("The search results for '  pilot   ink' are:")
-        end
-      end
-
-      context "with different search results" do
-        it "handles empty search results" do
-          allow(mock_google_search).to receive(:perform).and_return([])
-
-          result = test_instance.call_function(:search_web, { search_query: "test" })
-
-          expect(GoogleSearchSummarizer).to have_received(:new).with("test ink", [], mock_agent_log)
-          expect(result).to include("The search results for 'test ink' are:")
-        end
-
-        it "handles single search result" do
-          single_result = ["single result"]
-          allow(mock_google_search).to receive(:perform).and_return(single_result)
-
-          test_instance.call_function(:search_web, { search_query: "test" })
-
-          expect(GoogleSearchSummarizer).to have_received(:new).with(
-            "test ink",
-            single_result,
-            mock_agent_log
-          )
-        end
-
-        it "handles multiple search results" do
-          multiple_results = %w[result1 result2 result3 result4 result5]
-          allow(mock_google_search).to receive(:perform).and_return(multiple_results)
-
-          test_instance.call_function(:search_web, { search_query: "test" })
-
-          expect(GoogleSearchSummarizer).to have_received(:new).with(
-            "test ink",
-            multiple_results,
-            mock_agent_log
-          )
         end
       end
 
@@ -220,30 +184,21 @@ describe InkWebSearch do
 
       describe "integration flow" do
         it "follows the complete flow from query to result" do
-          # Setup the complete chain
           query = "noodlers black"
           modified_query = "noodlers black ink"
-          mock_results = %w[result1 result2]
           mock_summary = "Comprehensive summary"
 
-          allow(GoogleSearch).to receive(:new).with(modified_query).and_return(mock_google_search)
-          allow(mock_google_search).to receive(:perform).and_return(mock_results)
           allow(GoogleSearchSummarizer).to receive(:new).with(
             modified_query,
-            mock_results,
-            mock_agent_log
+            parent_agent_log: mock_agent_log
           ).and_return(mock_google_search_summarizer)
           allow(mock_google_search_summarizer).to receive(:perform).and_return(mock_summary)
 
           result = test_instance.call_function(:search_web, { search_query: query })
 
-          # Verify the complete chain
-          expect(GoogleSearch).to have_received(:new).with(modified_query)
-          expect(mock_google_search).to have_received(:perform)
           expect(GoogleSearchSummarizer).to have_received(:new).with(
             modified_query,
-            mock_results,
-            mock_agent_log
+            parent_agent_log: mock_agent_log
           )
           expect(mock_google_search_summarizer).to have_received(:perform)
           expect(result).to eq("The search results for '#{modified_query}' are:\n #{mock_summary}")
@@ -251,25 +206,6 @@ describe InkWebSearch do
       end
 
       describe "error handling" do
-        it "propagates GoogleSearch instantiation errors" do
-          allow(GoogleSearch).to receive(:new).and_raise(
-            StandardError,
-            "Search service unavailable"
-          )
-
-          expect {
-            test_instance.call_function(:search_web, { search_query: "test" })
-          }.to raise_error(StandardError, "Search service unavailable")
-        end
-
-        it "propagates GoogleSearch perform errors" do
-          allow(mock_google_search).to receive(:perform).and_raise(StandardError, "API error")
-
-          expect {
-            test_instance.call_function(:search_web, { search_query: "test" })
-          }.to raise_error(StandardError, "API error")
-        end
-
         it "propagates GoogleSearchSummarizer instantiation errors" do
           allow(GoogleSearchSummarizer).to receive(:new).and_raise(
             StandardError,
@@ -301,10 +237,7 @@ describe InkWebSearch do
         end
 
         context "when agent_log raises NotImplementedError" do
-          before do
-            # Don't mock agent_log, let it raise NotImplementedError naturally
-            allow(test_instance).to receive(:agent_log).and_call_original
-          end
+          before { allow(test_instance).to receive(:agent_log).and_call_original }
 
           it "propagates the NotImplementedError" do
             expect {
@@ -318,14 +251,20 @@ describe InkWebSearch do
         it "handles missing search_query parameter" do
           result = test_instance.call_function(:search_web, {})
 
-          expect(GoogleSearch).to have_received(:new).with(" ink")
+          expect(GoogleSearchSummarizer).to have_received(:new).with(
+            " ink",
+            parent_agent_log: mock_agent_log
+          )
           expect(result).to include("The search results for ' ink' are:")
         end
 
         it "handles nil search_query parameter" do
           result = test_instance.call_function(:search_web, { search_query: nil })
 
-          expect(GoogleSearch).to have_received(:new).with(" ink")
+          expect(GoogleSearchSummarizer).to have_received(:new).with(
+            " ink",
+            parent_agent_log: mock_agent_log
+          )
           expect(result).to include("The search results for ' ink' are:")
         end
       end

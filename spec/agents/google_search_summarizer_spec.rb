@@ -3,9 +3,9 @@ require "rails_helper"
 RSpec.describe GoogleSearchSummarizer do
   before(:each) { WebMock.reset! }
 
-  let(:user) { create(:user) }
+  let(:parent_agent_log) { AgentLog.create!(name: "ParentAgent", transcript: []) }
   let(:search_term) { "Pilot Iroshizuku Kon-peki ink" }
-  let(:search_results) do
+  let(:google_api_response) do
     {
       "items" => [
         {
@@ -27,48 +27,34 @@ RSpec.describe GoogleSearchSummarizer do
     }
   end
 
-  subject { described_class.new(search_term, search_results, user) }
+  subject { described_class.new(search_term, parent_agent_log: parent_agent_log) }
+
+  before do
+    stub_request(:get, %r{www.googleapis.com/customsearch}).to_return(
+      status: 200,
+      body: google_api_response.to_json,
+      headers: {
+        "Content-Type" => "application/json"
+      }
+    )
+  end
 
   describe "#initialize" do
-    it "creates agent with search term, results, and owner" do
-      summarizer = described_class.new(search_term, search_results, user)
+    it "creates agent with search term and parent agent log" do
+      summarizer = described_class.new(search_term, parent_agent_log: parent_agent_log)
       expect(summarizer.send(:search_term)).to eq(search_term)
-      expect(summarizer.send(:search_results)).to eq(search_results)
-      expect(summarizer.send(:owner)).to eq(user)
-    end
-
-    it "initializes transcript with system directive" do
-      summarizer = described_class.new(search_term, search_results, user)
-      expect(summarizer.transcript.first[:system]).to be_present
-      expect(summarizer.transcript.first[:system]).to include(
-        "You are tasked with summarizing the results of a Google search"
-      )
-      expect(summarizer.transcript.first[:system]).to include("alternative spellings or names")
-    end
-
-    it "adds search term prompt to transcript" do
-      summarizer = described_class.new(search_term, search_results, user)
-      search_term_message =
-        summarizer.transcript.find { |msg| msg[:user]&.include?("search was done for") }
-      expect(search_term_message[:user]).to include(search_term)
-    end
-
-    it "adds search results prompt to transcript" do
-      summarizer = described_class.new(search_term, search_results, user)
-      search_results_message =
-        summarizer.transcript.find { |msg| msg[:user]&.include?("search results are") }
-      expect(search_results_message[:user]).to include(search_results.to_json)
+      expect(summarizer.send(:parent_agent_log)).to eq(parent_agent_log)
     end
   end
 
   describe "#agent_log" do
-    it "creates and memoizes agent log" do
+    it "creates and memoizes agent log owned by parent agent log" do
       log1 = subject.agent_log
       log2 = subject.agent_log
 
       expect(log1).to be_persisted
       expect(log1.name).to eq("GoogleSearchSummarizer")
-      expect(log1.owner).to eq(user)
+      expect(log1.owner).to eq(parent_agent_log)
       expect(log1).to eq(log2)
     end
   end
@@ -121,6 +107,12 @@ RSpec.describe GoogleSearchSummarizer do
       )
     end
 
+    it "performs a Google search" do
+      subject.perform
+
+      expect(WebMock).to have_requested(:get, %r{www.googleapis.com/customsearch}).once
+    end
+
     it "makes HTTP request to OpenAI API" do
       subject.perform
 
@@ -161,6 +153,27 @@ RSpec.describe GoogleSearchSummarizer do
       expect(result).to be_a(String)
       expect(result).to include("Pilot Iroshizuku Kon-peki")
       expect(result).to include("deep azure blue")
+    end
+
+    it "updates agent log transcript" do
+      subject.perform
+
+      transcript = subject.agent_log.transcript
+      expect(transcript).to be_an(Array)
+      expect(transcript.length).to be >= 3
+      expect(transcript.first["role"]).to eq("system")
+      expect(transcript.any? { |e| e["role"] == "user" }).to be true
+      expect(transcript.any? { |e| e["role"] == "assistant" }).to be true
+    end
+
+    it "updates agent log usage" do
+      subject.perform
+
+      usage = subject.agent_log.usage
+      expect(usage["prompt_tokens"]).to eq(150)
+      expect(usage["completion_tokens"]).to eq(75)
+      expect(usage["total_tokens"]).to eq(225)
+      expect(usage["model"]).to eq("gpt-4.1-mini")
     end
   end
 
@@ -227,7 +240,7 @@ RSpec.describe GoogleSearchSummarizer do
         .with { |req|
           body = JSON.parse(req.body)
           body["messages"].any? do |msg|
-            msg["content"]&.include?("The search results are: #{search_results.to_json}")
+            msg["content"]&.include?("The search results are: #{google_api_response.to_json}")
           end
         }
         .at_least_once
@@ -235,9 +248,16 @@ RSpec.describe GoogleSearchSummarizer do
 
     it "handles empty search results" do
       empty_results = { "items" => [] }
-      summarizer = described_class.new(search_term, empty_results, user)
+      stub_request(:get, %r{www.googleapis.com/customsearch}).to_return(
+        status: 200,
+        body: empty_results.to_json,
+        headers: {
+          "Content-Type" => "application/json"
+        }
+      )
+      summarizer = described_class.new(search_term, parent_agent_log: parent_agent_log)
 
-      result = summarizer.perform
+      summarizer.perform
 
       expect(WebMock).to have_requested(:post, "https://api.openai.com/v1/chat/completions")
         .with { |req|
@@ -251,7 +271,7 @@ RSpec.describe GoogleSearchSummarizer do
 
     it "handles special characters in search term" do
       special_search_term = "Mont Blanc Nightfire Red & Blue ink"
-      summarizer = described_class.new(special_search_term, search_results, user)
+      summarizer = described_class.new(special_search_term, parent_agent_log: parent_agent_log)
 
       summarizer.perform
 
@@ -278,7 +298,7 @@ RSpec.describe GoogleSearchSummarizer do
       end
 
       it "raises an error" do
-        expect { subject.perform }.to raise_error(Faraday::ServerError)
+        expect { subject.perform }.to raise_error(RubyLLM::ServerError)
       end
     end
 
@@ -330,7 +350,6 @@ RSpec.describe GoogleSearchSummarizer do
       end
 
       it "handles response without tool calls gracefully" do
-        # This should not raise an error, but may not set the summary
         expect { subject.perform }.not_to raise_error
       end
     end
@@ -377,42 +396,74 @@ RSpec.describe GoogleSearchSummarizer do
       end
 
       it "handles malformed function arguments" do
-        # Suppress the warning about bad JSON that comes from the Raix gem
-        silence_warnings { expect { subject.perform }.to raise_error(JSON::ParserError) }
+        expect { subject.perform }.to raise_error(JSON::ParserError)
+      end
+    end
+
+    context "when Google Search fails" do
+      before do
+        stub_request(:get, %r{www.googleapis.com/customsearch}).to_return(
+          status: 500,
+          body: "Internal Server Error"
+        )
+        stub_request(:post, "https://api.openai.com/v1/chat/completions").to_return(
+          status: 200,
+          body: {
+            "id" => "chatcmpl-test",
+            "object" => "chat.completion",
+            "created" => 1_677_652_288,
+            "model" => "gpt-4.1-mini",
+            "choices" => [
+              {
+                "index" => 0,
+                "message" => {
+                  "role" => "assistant",
+                  "content" => "",
+                  "tool_calls" => [
+                    {
+                      "id" => "call_test",
+                      "type" => "function",
+                      "function" => {
+                        "name" => "summarize_search_results",
+                        "arguments" => {
+                          "summary" => "Search failed, no results available."
+                        }.to_json
+                      }
+                    }
+                  ]
+                },
+                "finish_reason" => "tool_calls"
+              }
+            ],
+            "usage" => {
+              "prompt_tokens" => 50,
+              "completion_tokens" => 25,
+              "total_tokens" => 75
+            }
+          }.to_json,
+          headers: {
+            "Content-Type" => "application/json"
+          }
+        )
+      end
+
+      it "passes the error to the LLM and still returns a summary" do
+        result = subject.perform
+
+        expect(result).to be_a(String)
+        expect(WebMock).to have_requested(
+          :post,
+          "https://api.openai.com/v1/chat/completions"
+        ).with { |req|
+          body = JSON.parse(req.body)
+          body["messages"].any? { |msg| msg["content"]&.include?("Internal Server Error") }
+        }
       end
     end
   end
 
   describe "integration scenarios" do
     context "complete summarization workflow" do
-      let(:comprehensive_search_results) do
-        {
-          "items" => [
-            {
-              "title" => "Pilot Iroshizuku Kon-peki - Deep Azure Blue Fountain Pen Ink",
-              "link" => "https://example.com/pilot-iroshizuku-kon-peki",
-              "snippet" =>
-                "Pilot Iroshizuku Kon-peki is a beautiful deep azure blue fountain pen ink. Perfect for daily writing and special occasions."
-            },
-            {
-              "title" => "Review: Pilot Iroshizuku Kon-peki Ink",
-              "link" => "https://example.com/review-kon-peki",
-              "snippet" =>
-                "A comprehensive review of Pilot's popular Kon-peki ink. Great flow and beautiful color variation."
-            },
-            {
-              "title" => "Kon-peki vs Other Blue Inks",
-              "link" => "https://example.com/blue-ink-comparison",
-              "snippet" =>
-                "Comparing Kon-peki with other popular blue fountain pen inks. Also known as Deep Azure Blue."
-            }
-          ],
-          "searchInformation" => {
-            "totalResults" => "2450"
-          }
-        }
-      end
-
       before do
         stub_request(:post, "https://api.openai.com/v1/chat/completions").to_return(
           status: 200,
@@ -457,7 +508,7 @@ RSpec.describe GoogleSearchSummarizer do
       end
 
       it "completes full summarization workflow" do
-        summarizer = described_class.new(search_term, comprehensive_search_results, user)
+        summarizer = described_class.new(search_term, parent_agent_log: parent_agent_log)
 
         result = summarizer.perform
 
@@ -470,7 +521,7 @@ RSpec.describe GoogleSearchSummarizer do
         # Check agent log is properly updated
         expect(summarizer.agent_log.extra_data["summary"]).to eq(result)
         expect(summarizer.agent_log.state).to eq("approved")
-        expect(summarizer.agent_log.owner).to eq(user)
+        expect(summarizer.agent_log.owner).to eq(parent_agent_log)
         expect(summarizer.agent_log.name).to eq("GoogleSearchSummarizer")
       end
     end
@@ -492,6 +543,13 @@ RSpec.describe GoogleSearchSummarizer do
       end
 
       before do
+        stub_request(:get, %r{www.googleapis.com/customsearch}).to_return(
+          status: 200,
+          body: low_results.to_json,
+          headers: {
+            "Content-Type" => "application/json"
+          }
+        )
         stub_request(:post, "https://api.openai.com/v1/chat/completions").to_return(
           status: 200,
           body: {
@@ -535,7 +593,8 @@ RSpec.describe GoogleSearchSummarizer do
       end
 
       it "handles low result count scenarios" do
-        summarizer = described_class.new("Obscure Ink Brand XYZ", low_results, user)
+        summarizer =
+          described_class.new("Obscure Ink Brand XYZ", parent_agent_log: parent_agent_log)
 
         result = summarizer.perform
 
@@ -546,18 +605,19 @@ RSpec.describe GoogleSearchSummarizer do
     end
   end
 
-  describe "function dispatch" do
-    describe "#summarize_search_results" do
-      it "sets the summary and stops tool calls" do
-        test_summary = "This is a test summary"
+  describe "tool" do
+    it "uses SummarizeSearchResults tool" do
+      tool = described_class::SummarizeSearchResults.new
+      expect(tool.name).to eq("summarize_search_results")
+      expect(tool.description).to eq("Summarize the search results")
+    end
 
-        # Test that the function is defined and accessible
-        expect(subject.class.instance_methods).to include(:summarize_search_results)
+    it "halts with the summary" do
+      tool = described_class::SummarizeSearchResults.new
+      result = tool.call(summary: "Test summary")
 
-        # Test the summary attribute can be set
-        subject.instance_variable_set(:@summary, test_summary)
-        expect(subject.send(:summary)).to eq(test_summary)
-      end
+      expect(result).to be_a(RubyLLM::Tool::Halt)
+      expect(result.content).to eq("Test summary")
     end
   end
 end

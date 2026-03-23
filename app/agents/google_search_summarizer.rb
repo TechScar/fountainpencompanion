@@ -1,7 +1,17 @@
 class GoogleSearchSummarizer
-  include Raix::ChatCompletion
-  include Raix::FunctionDispatch
-  include AgentTranscript
+  include RubyLlmAgent
+
+  class SummarizeSearchResults < RubyLLM::Tool
+    description "Summarize the search results"
+
+    def name = "summarize_search_results"
+
+    params { string :summary, description: "The summary of the search results" }
+
+    def execute(summary:)
+      halt summary
+    end
+  end
 
   SYSTEM_DIRECTIVE = <<~TEXT
     You are tasked with summarizing the results of a Google search for further
@@ -20,44 +30,41 @@ class GoogleSearchSummarizer
     search results.
   TEXT
 
-  def initialize(search_term, search_results, owner)
-    self.search_term = search_term
-    self.search_results = search_results
-    self.owner = owner
-    transcript << { system: SYSTEM_DIRECTIVE }
-    transcript << { user: search_term_prompt }
-    transcript << { user: search_results_prompt }
+  def initialize(search_term, parent_agent_log:)
+    @search_term = search_term
+    @parent_agent_log = parent_agent_log
   end
 
   def perform
-    chat_completion(openai: "gpt-4.1-mini")
+    response = ask(user_prompt)
+    self.summary = response.content
     agent_log.update!(extra_data: { summary: summary })
     agent_log.approve!
     summary
   end
 
   def agent_log
-    @agent_log ||= AgentLog.create!(name: self.class.name, transcript: [], owner: owner)
+    @agent_log ||= AgentLog.create!(name: self.class.name, transcript: [], owner: parent_agent_log)
   end
 
   private
 
-  attr_accessor :search_term, :search_results, :summary, :owner
+  attr_reader :search_term, :parent_agent_log
+  attr_accessor :summary
 
-  def search_term_prompt
-    "The search was done for the following search term: #{search_term}"
+  def model_id = "gpt-4.1-mini"
+  def system_directive = SYSTEM_DIRECTIVE
+  def tools = [SummarizeSearchResults]
+
+  def search_results
+    @search_results ||= GoogleSearch.new(search_term).perform
   end
 
-  def search_results_prompt
-    "The search results are: #{search_results.to_json}"
-  end
+  def user_prompt
+    <<~TEXT
+      The search was done for the following search term: #{search_term}
 
-  function :summarize_search_results,
-           "Summarize the search results",
-           summary: {
-             type: "string"
-           } do |arguments|
-    self.summary = arguments[:summary]
-    stop_tool_calls_and_respond!
+      The search results are: #{search_results.to_json}
+    TEXT
   end
 end
