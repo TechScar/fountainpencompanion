@@ -158,7 +158,7 @@ spec/
 ## Key Conventions
 
 - **New code should be well-structured and thoroughly tested.** Existing code quality varies; don't model new additions after poorly-tested older code.
-- **Ruby**: snake_case for methods/variables, CamelCase for classes/modules. Rescue specific errors only.
+- **Ruby**: snake_case for methods/variables, CamelCase for classes/modules. Rescue specific errors only. Prefer `attr_accessor` with `self.x =` in constructors over bare `@x` instance variables.
 - **JavaScript/JSX**: PascalCase for components, camelCase for variables/functions. Tests use `*.spec.js(x)` extension.
 - **Commits**: lint-staged runs Prettier and ESLint on staged files via Husky pre-commit hook.
 
@@ -208,7 +208,6 @@ end
 Key points:
 
 - Always override `def name` — the auto-generated name includes module prefixes for inner classes
-- Use `attr_accessor` with `self.x =` in constructors, not bare `@x`
 - `halt "message"` stops the tool call loop; returning a plain string sends it back to the LLM
 - Tools with no parameters: omit `param` declarations and define `execute` with no arguments
 - Pass dependencies (owner objects, agent_log) via the constructor
