@@ -35,6 +35,7 @@ module RubyLlmAgent
     c = ruby_llm_context.chat(model: model_id)
     c.with_instructions(system_directive)
     tools.each { |tool| c.with_tool(tool) }
+    restore_transcript(c)
     register_callbacks(c)
     c
   end
@@ -88,5 +89,28 @@ module RubyLlmAgent
 
   def serialize_tool_calls(tool_calls)
     tool_calls.map { |id, tc| { id: id, name: tc.name, arguments: tc.arguments } }
+  end
+
+  # Restores non-system messages from a previously saved transcript,
+  # allowing agents to resume interrupted conversations.
+  def restore_transcript(chat)
+    return if agent_log.transcript.blank?
+
+    agent_log.transcript.each do |entry|
+      entry = entry.deep_symbolize_keys
+      next if entry[:role].to_s.in?(%w[system developer])
+
+      attrs = { role: entry[:role].to_sym, content: entry[:content].to_s }
+      attrs[:tool_call_id] = entry[:tool_call_id] if entry[:tool_call_id]
+      attrs[:tool_calls] = deserialize_tool_calls(entry[:tool_calls]) if entry[:tool_calls]
+      chat.add_message(attrs)
+    end
+  end
+
+  def deserialize_tool_calls(tool_calls_array)
+    tool_calls_array.to_h do |tc|
+      tc = tc.deep_symbolize_keys
+      [tc[:id], RubyLLM::ToolCall.new(id: tc[:id], name: tc[:name], arguments: tc[:arguments])]
+    end
   end
 end

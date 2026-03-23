@@ -44,7 +44,8 @@ class GoogleSearchSummarizer
   end
 
   def agent_log
-    @agent_log ||= AgentLog.create!(name: self.class.name, transcript: [], owner: parent_agent_log)
+    @agent_log ||= parent_agent_log.agent_logs.processing.where(name: self.class.name).first
+    @agent_log ||= parent_agent_log.agent_logs.create!(name: self.class.name, transcript: [])
   end
 
   private
