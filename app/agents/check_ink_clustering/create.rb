@@ -2,8 +2,6 @@ class CheckInkClustering::Create < CheckInkClustering::Base
   class ApproveClusterCreation < RubyLLM::Tool
     description "Approve the creation of a new cluster"
 
-    def name = "approve_cluster_creation"
-
     param :explanation_of_decision, desc: "Explanation of why the cluster creation was approved"
 
     attr_accessor :agent_log
@@ -25,8 +23,6 @@ class CheckInkClustering::Create < CheckInkClustering::Base
 
   class RejectClusterCreation < RubyLLM::Tool
     description "Reject the creation of a new cluster"
-
-    def name = "reject_cluster_creation"
 
     param :explanation_of_decision, desc: "Explanation of why the cluster creation was rejected"
 

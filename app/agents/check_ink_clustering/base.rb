@@ -1,13 +1,13 @@
 class CheckInkClustering::Base
   include RubyLlmAgent
 
+  MODEL_ID = "gpt-4.1"
+
   APPROVE = "approve"
   REJECT = "reject"
 
   class LogOfClustering < RubyLLM::Tool
     description "Log of the chat with the LLM that produced the action you are reviewing"
-
-    def name = "log_of_clustering"
 
     attr_accessor :micro_cluster_agent_log
 
@@ -45,16 +45,11 @@ class CheckInkClustering::Base
     end
   end
 
-  def agent_log
-    @agent_log ||= micro_cluster_agent_log.agent_logs.processing.where(name: self.class.name).first
-    @agent_log ||= micro_cluster_agent_log.agent_logs.create!(name: self.class.name, transcript: [])
-  end
+  def agent_log = find_or_create_agent_log(micro_cluster_agent_log)
 
   private
 
   attr_accessor :micro_cluster_agent_log
-
-  def model_id = "gpt-4.1"
 
   def base_tools
     [

@@ -4,8 +4,6 @@ class ReviewFinder
   class SubmitReview < RubyLLM::Tool
     description "Submit a review for the ink clusters"
 
-    def name = "submit_review"
-
     param :ink_cluster_id,
           type: "integer",
           desc:
@@ -32,8 +30,6 @@ class ReviewFinder
   class Done < RubyLLM::Tool
     description "Call this if you are done submitting all reviews"
 
-    def name = "done"
-
     param :summary, desc: "A summary of the actions you have taken"
 
     attr_accessor :agent_log
@@ -51,8 +47,6 @@ class ReviewFinder
   class Summarize < RubyLLM::Tool
     description "Return a summary of the web page"
 
-    def name = "summarize"
-
     attr_accessor :page_data, :agent_log
 
     def initialize(page_data, agent_log)
@@ -69,6 +63,8 @@ class ReviewFinder
       end
     end
   end
+
+  MODEL_ID = "gpt-4.1"
 
   SYSTEM_DIRECTIVE = <<~TEXT
     You will be given details about a web page or Youtube video below. The page
@@ -105,17 +101,11 @@ class ReviewFinder
     agent_log.waiting_for_approval!
   end
 
-  def agent_log
-    @agent_log ||= page.agent_logs.processing.where(name: self.class.name).first
-    @agent_log ||= page.agent_logs.create!(name: self.class.name, transcript: [])
-  end
+  def agent_log = find_or_create_agent_log(page)
 
   private
 
   attr_accessor :page
-
-  def model_id = "gpt-4.1"
-  def system_directive = SYSTEM_DIRECTIVE
 
   def tools
     [

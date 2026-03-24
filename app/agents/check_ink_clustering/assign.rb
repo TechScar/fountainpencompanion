@@ -2,8 +2,6 @@ class CheckInkClustering::Assign < CheckInkClustering::Base
   class ApproveAssignment < RubyLLM::Tool
     description "Approve the assignment of the ink to the cluster"
 
-    def name = "approve_assignment"
-
     param :explanation_of_decision, desc: "Explanation of why the assignment is correct"
 
     attr_accessor :agent_log
@@ -25,8 +23,6 @@ class CheckInkClustering::Assign < CheckInkClustering::Base
 
   class RejectAssignment < RubyLLM::Tool
     description "Reject the assignment of the ink to the cluster"
-
-    def name = "reject_assignment"
 
     param :explanation_of_decision, desc: "Explanation of why the assignment is incorrect"
 

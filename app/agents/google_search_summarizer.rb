@@ -4,14 +4,14 @@ class GoogleSearchSummarizer
   class SummarizeSearchResults < RubyLLM::Tool
     description "Summarize the search results"
 
-    def name = "summarize_search_results"
-
     params { string :summary, description: "The summary of the search results" }
 
     def execute(summary:)
       halt summary
     end
   end
+
+  MODEL_ID = "gpt-4.1-mini"
 
   SYSTEM_DIRECTIVE = <<~TEXT
     You are tasked with summarizing the results of a Google search for further
@@ -43,18 +43,13 @@ class GoogleSearchSummarizer
     summary
   end
 
-  def agent_log
-    @agent_log ||= parent_agent_log.agent_logs.processing.where(name: self.class.name).first
-    @agent_log ||= parent_agent_log.agent_logs.create!(name: self.class.name, transcript: [])
-  end
+  def agent_log = find_or_create_agent_log(parent_agent_log)
 
   private
 
   attr_reader :search_term, :parent_agent_log
   attr_accessor :summary
 
-  def model_id = "gpt-4.1-mini"
-  def system_directive = SYSTEM_DIRECTIVE
   def tools = [SummarizeSearchResults]
 
   def search_results

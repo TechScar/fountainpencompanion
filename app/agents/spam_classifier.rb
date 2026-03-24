@@ -6,8 +6,6 @@ class SpamClassifier
   class ClassifyAsSpam < RubyLLM::Tool
     description "Classify the account as spam"
 
-    def name = "classify_as_spam"
-
     param :explanation_of_action, desc: "Reasoning for classifying this account as spam"
 
     def initialize(user, agent_log)
@@ -25,8 +23,6 @@ class SpamClassifier
   class ClassifyAsNormal < RubyLLM::Tool
     description "Classify the account as normal"
 
-    def name = "classify_as_normal"
-
     param :explanation_of_action, desc: "Reasoning for classifying this account as normal"
 
     def initialize(user, agent_log)
@@ -40,6 +36,8 @@ class SpamClassifier
       halt "classified as normal"
     end
   end
+
+  MODEL_ID = "gpt-4.1-mini"
 
   SYSTEM_DIRECTIVE = <<~TEXT
     You are a spam classifier. You will be given examples of spam and normal
@@ -57,16 +55,12 @@ class SpamClassifier
     agent_log.waiting_for_approval!
   end
 
-  def agent_log
-    @agent_log ||= AgentLog.create!(name: self.class.name, transcript: [], owner: user)
-  end
+  def agent_log = find_or_create_agent_log(user)
 
   private
 
   attr_reader :user
 
-  def model_id = "gpt-4.1-mini"
-  def system_directive = SYSTEM_DIRECTIVE
   def tools = [ClassifyAsSpam.new(user, agent_log), ClassifyAsNormal.new(user, agent_log)]
 
   def user_prompt

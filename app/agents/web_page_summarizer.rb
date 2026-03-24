@@ -1,6 +1,8 @@
 class WebPageSummarizer
   include RubyLlmAgent
 
+  MODEL_ID = "gpt-4.1-mini"
+
   SYSTEM_DIRECTIVE = <<~TEXT
     You will be given the raw HTML of a web page. Your task is to summarize the page
     and return the summary in a human-readable format. The summary should include
@@ -18,16 +20,9 @@ class WebPageSummarizer
     response.content
   end
 
-  def agent_log
-    @agent_log ||= parent_agent_log.agent_logs.processing.where(name: self.class.name).first
-    @agent_log ||= parent_agent_log.agent_logs.create!(name: self.class.name, transcript: [])
-  end
+  def agent_log = find_or_create_agent_log(parent_agent_log)
 
   private
 
   attr_reader :parent_agent_log, :raw_html
-
-  def model_id = "gpt-4.1-mini"
-  def system_directive = SYSTEM_DIRECTIVE
-  def tools = []
 end

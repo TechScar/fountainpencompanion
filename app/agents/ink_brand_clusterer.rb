@@ -4,8 +4,6 @@ class InkBrandClusterer
   class AddToBrandCluster < RubyLLM::Tool
     description "Add ink to the brand cluster"
 
-    def name = "add_to_brand_cluster"
-
     param :brand_cluster_id, type: "integer", desc: "The ID of the brand cluster to add the ink to"
 
     attr_accessor :macro_cluster, :agent_log
@@ -34,8 +32,6 @@ class InkBrandClusterer
   class CreateNewBrandCluster < RubyLLM::Tool
     description "Create a new brand cluster"
 
-    def name = "create_new_brand_cluster"
-
     attr_accessor :macro_cluster, :agent_log
 
     def initialize(macro_cluster, agent_log)
@@ -49,6 +45,8 @@ class InkBrandClusterer
       halt "Created new brand cluster"
     end
   end
+
+  MODEL_ID = "gpt-4.1"
 
   SYSTEM_DIRECTIVE = <<~TEXT
     Your task is to determine if the given ink belongs to one of the existing
@@ -78,16 +76,11 @@ class InkBrandClusterer
     agent_log
   end
 
-  def agent_log
-    @agent_log ||= macro_cluster.agent_logs.create!(name: self.class.name, transcript: [])
-  end
+  def agent_log = find_or_create_agent_log(macro_cluster)
 
   private
 
   attr_accessor :macro_cluster
-
-  def model_id = "gpt-4.1"
-  def system_directive = SYSTEM_DIRECTIVE
 
   def tools
     [

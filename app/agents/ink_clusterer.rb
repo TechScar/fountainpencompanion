@@ -31,8 +31,6 @@ class InkClusterer
   class AssignToCluster < BaseTool
     description "Assign ink to existing cluster"
 
-    def name = "assign_to_cluster"
-
     param :cluster_id, type: "integer", desc: "The ID of the cluster to assign the ink to"
     param :explanation_of_decision,
           desc:
@@ -56,8 +54,6 @@ class InkClusterer
   class CreateNewCluster < BaseTool
     description "Create a new cluster for this ink"
 
-    def name = "create_new_cluster"
-
     param :explanation_of_decision,
           desc:
             "Explain why you are creating a new cluster for this ink and not assigning it to an existing one or ignoring it"
@@ -75,8 +71,6 @@ class InkClusterer
 
   class IgnoreInk < BaseTool
     description "Ignore this ink"
-
-    def name = "ignore_ink"
 
     param :explanation_of_decision,
           desc:
@@ -96,8 +90,6 @@ class InkClusterer
   class HandOverToHuman < BaseTool
     description "Hand over to human to do the assignment"
 
-    def name = "hand_over_to_human"
-
     def execute
       update_extra_data("msg" => "Handing over #{micro_cluster_str} to human")
       halt "Handing over to human"
@@ -106,8 +98,6 @@ class InkClusterer
 
   class KnownBrand < RubyLLM::Tool
     description "Check if brand of ink is known"
-
-    def name = "known_brand"
 
     attr_accessor :micro_cluster
 
@@ -128,6 +118,8 @@ class InkClusterer
       end
     end
   end
+
+  MODEL_ID = "gpt-4.1"
 
   SYSTEM_DIRECTIVE = <<~TEXT
     You are a clustering algorithm that groups similar inks together based on their properties.
@@ -256,10 +248,6 @@ class InkClusterer
   private
 
   attr_accessor :micro_cluster, :agent_log_id
-
-  def model_id = "gpt-4.1"
-
-  def system_directive = SYSTEM_DIRECTIVE
 
   def tools
     [
