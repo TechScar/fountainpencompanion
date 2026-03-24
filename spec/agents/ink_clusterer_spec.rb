@@ -36,43 +36,6 @@ RSpec.describe InkClusterer do
       clusterer = described_class.new(micro_cluster.id, agent_log_id: agent_log.id)
       expect(clusterer.agent_log).to eq(agent_log)
     end
-
-    it "initializes transcript with system directive" do
-      clusterer = described_class.new(micro_cluster.id)
-      expect(clusterer.transcript.first[:system]).to be_present
-      expect(clusterer.transcript.first[:system]).to include("clustering algorithm")
-    end
-
-    it "includes micro cluster data in transcript" do
-      clusterer = described_class.new(micro_cluster.id)
-      user_message = clusterer.transcript.find { |msg| msg[:user] }[:user]
-      expect(user_message).to include(micro_cluster.id.to_s)
-      expect(user_message).to include("Pilot")
-      expect(user_message).to include("Iroshizuku")
-    end
-
-    context "with processed tries" do
-      let!(:rejected_log) do
-        AgentLog.create!(
-          name: "InkClusterer",
-          owner: micro_cluster,
-          transcript: [],
-          state: "rejected",
-          extra_data: {
-            "action" => "assign_to_cluster",
-            "cluster_id" => existing_macro_cluster.id
-          },
-          created_at: 1.hour.ago
-        )
-      end
-
-      it "includes processed tries data in transcript" do
-        clusterer = described_class.new(micro_cluster.id)
-        processed_tries_message = clusterer.transcript.select { |msg| msg[:user] }.last[:user]
-        expect(processed_tries_message).to include("processed before")
-        expect(processed_tries_message).to include("Assigning ink to existing cluster")
-      end
-    end
   end
 
   describe "#agent_log" do
@@ -406,115 +369,127 @@ RSpec.describe InkClusterer do
     end
   end
 
-  describe "function validation through OpenAI responses" do
-    context "when AI calls assign_to_cluster with valid data" do
-      let(:valid_assign_response) do
-        {
-          "id" => "chatcmpl-assign",
-          "object" => "chat.completion",
-          "created" => 1_677_652_288,
-          "model" => "gpt-4.1",
-          "choices" => [
-            {
-              "index" => 0,
-              "message" => {
-                "role" => "assistant",
-                "content" => "",
-                "tool_calls" => [
-                  {
-                    "id" => "call_assign",
-                    "type" => "function",
-                    "function" => {
-                      "name" => "assign_to_cluster",
-                      "arguments" => {
-                        "cluster_id" => existing_macro_cluster.id,
-                        "explanation_of_decision" => "These inks are similar"
-                      }.to_json
-                    }
-                  }
-                ]
-              },
-              "finish_reason" => "tool_calls"
-            }
-          ],
-          "usage" => {
-            "prompt_tokens" => 100,
-            "completion_tokens" => 50,
-            "total_tokens" => 150
-          }
-        }
-      end
+  describe InkClusterer::AssignToCluster do
+    let(:tool_agent_log) do
+      AgentLog.create!(name: "InkClusterer", owner: micro_cluster, transcript: [])
+    end
+    let(:tool) { described_class.new(micro_cluster, tool_agent_log) }
 
-      before(:each) do
-        stub_request(:post, "https://api.openai.com/v1/chat/completions").to_return(
-          status: 200,
-          body: valid_assign_response.to_json,
-          headers: {
-            "Content-Type" => "application/json"
-          }
+    it "assigns ink to cluster and halts on valid input" do
+      result =
+        tool.call(
+          cluster_id: existing_macro_cluster.id,
+          explanation_of_decision: "These inks are similar"
+        )
+
+      expect(result).to be_a(RubyLLM::Tool::Halt)
+      expect(tool_agent_log.reload.extra_data["action"]).to eq("assign_to_cluster")
+      expect(tool_agent_log.extra_data["cluster_id"]).to eq(existing_macro_cluster.id)
+      expect(tool_agent_log.extra_data["explanation_of_decision"]).to eq("These inks are similar")
+    end
+
+    it "returns error for invalid cluster ID" do
+      result = tool.call(cluster_id: 99_999, explanation_of_decision: "Test explanation")
+
+      expect(result).to be_a(String)
+      expect(result).to include("Tool call not successful")
+    end
+
+    it "returns error for missing explanation" do
+      result = tool.call(cluster_id: existing_macro_cluster.id, explanation_of_decision: "")
+
+      expect(result).to be_a(String)
+      expect(result).to include("Tool call not successful")
+    end
+  end
+
+  describe InkClusterer::CreateNewCluster do
+    let(:tool_agent_log) do
+      AgentLog.create!(name: "InkClusterer", owner: micro_cluster, transcript: [])
+    end
+    let(:tool) { described_class.new(micro_cluster, tool_agent_log) }
+
+    it "creates new cluster action and halts on valid input" do
+      result = tool.call(explanation_of_decision: "This is a unique ink")
+
+      expect(result).to be_a(RubyLLM::Tool::Halt)
+      expect(tool_agent_log.reload.extra_data["action"]).to eq("create_new_cluster")
+      expect(tool_agent_log.extra_data["explanation_of_decision"]).to eq("This is a unique ink")
+    end
+
+    it "returns error for missing explanation" do
+      result = tool.call(explanation_of_decision: "")
+
+      expect(result).to be_a(String)
+      expect(result).to include("Tool call not successful")
+    end
+  end
+
+  describe InkClusterer::IgnoreInk do
+    let(:tool_agent_log) do
+      AgentLog.create!(name: "InkClusterer", owner: micro_cluster, transcript: [])
+    end
+    let(:tool) { described_class.new(micro_cluster, tool_agent_log) }
+
+    it "ignores ink and halts on valid input" do
+      result = tool.call(explanation_of_decision: "This is a custom mix")
+
+      expect(result).to be_a(RubyLLM::Tool::Halt)
+      expect(tool_agent_log.reload.extra_data["action"]).to eq("ignore_ink")
+      expect(tool_agent_log.extra_data["explanation_of_decision"]).to eq("This is a custom mix")
+    end
+
+    it "returns error for missing explanation" do
+      result = tool.call(explanation_of_decision: "")
+
+      expect(result).to be_a(String)
+      expect(result).to include("Tool call not successful")
+    end
+  end
+
+  describe InkClusterer::HandOverToHuman do
+    let(:tool_agent_log) do
+      AgentLog.create!(name: "InkClusterer", owner: micro_cluster, transcript: [])
+    end
+    let(:tool) { described_class.new(micro_cluster, tool_agent_log) }
+
+    it "hands over to human and halts" do
+      result = tool.call({})
+
+      expect(result).to be_a(RubyLLM::Tool::Halt)
+      expect(tool_agent_log.reload.extra_data["action"]).to eq("hand_over_to_human")
+    end
+  end
+
+  describe InkClusterer::KnownBrand do
+    let(:tool) { described_class.new(micro_cluster) }
+
+    context "when brand is known" do
+      before do
+        create(
+          :micro_cluster,
+          macro_cluster: existing_macro_cluster,
+          simplified_brand_name: micro_cluster.simplified_brand_name
         )
       end
 
-      it "processes valid cluster assignment" do
-        subject.perform
+      it "returns positive message" do
+        result = tool.call({})
 
-        expect(subject.agent_log.extra_data["action"]).to eq("assign_to_cluster")
-        expect(subject.agent_log.extra_data["cluster_id"]).to eq(existing_macro_cluster.id)
-        expect(subject.agent_log.extra_data["explanation_of_decision"]).to include("similar")
+        expect(result).to include("Yes, the ink brand is known.")
       end
     end
 
-    context "when AI calls assign_to_cluster with invalid cluster ID" do
-      let(:invalid_assign_response) do
-        {
-          "id" => "chatcmpl-invalid",
-          "object" => "chat.completion",
-          "created" => 1_677_652_288,
-          "model" => "gpt-4.1",
-          "choices" => [
-            {
-              "index" => 0,
-              "message" => {
-                "role" => "assistant",
-                "content" => "",
-                "tool_calls" => [
-                  {
-                    "id" => "call_invalid",
-                    "type" => "function",
-                    "function" => {
-                      "name" => "assign_to_cluster",
-                      "arguments" => {
-                        "cluster_id" => 99_999,
-                        "explanation_of_decision" => "Test explanation"
-                      }.to_json
-                    }
-                  }
-                ]
-              },
-              "finish_reason" => "tool_calls"
-            }
-          ],
-          "usage" => {
-            "prompt_tokens" => 100,
-            "completion_tokens" => 50,
-            "total_tokens" => 150
-          }
-        }
+    context "when brand is unknown" do
+      let!(:unknown_micro_cluster) do
+        create(:micro_cluster, simplified_brand_name: "unknownbrandxyz")
       end
+      let(:tool) { described_class.new(unknown_micro_cluster) }
 
-      before(:each) do
-        stub_request(:post, "https://api.openai.com/v1/chat/completions").to_return(
-          status: 200,
-          body: invalid_assign_response.to_json,
-          headers: {
-            "Content-Type" => "application/json"
-          }
-        )
-      end
+      it "returns negative message" do
+        result = tool.call({})
 
-      it "handles invalid cluster ID gracefully" do
-        # This should not crash and should continue processing
-        expect { subject.perform }.not_to raise_error
+        expect(result).to include("No, the ink brand is not known.")
       end
     end
   end
@@ -671,12 +646,55 @@ RSpec.describe InkClusterer do
   end
 
   describe "data formatting" do
+    before(:each) do
+      stub_request(:post, "https://api.openai.com/v1/chat/completions").to_return(
+        status: 200,
+        body: {
+          "id" => "chatcmpl-data",
+          "object" => "chat.completion",
+          "created" => 1_677_652_288,
+          "model" => "gpt-4.1",
+          "choices" => [
+            {
+              "index" => 0,
+              "message" => {
+                "role" => "assistant",
+                "content" => "",
+                "tool_calls" => [
+                  {
+                    "id" => "call_data",
+                    "type" => "function",
+                    "function" => {
+                      "name" => "assign_to_cluster",
+                      "arguments" => {
+                        "cluster_id" => existing_macro_cluster.id,
+                        "explanation_of_decision" => "Test explanation"
+                      }.to_json
+                    }
+                  }
+                ]
+              },
+              "finish_reason" => "tool_calls"
+            }
+          ],
+          "usage" => {
+            "prompt_tokens" => 100,
+            "completion_tokens" => 50,
+            "total_tokens" => 150
+          }
+        }.to_json,
+        headers: {
+          "Content-Type" => "application/json"
+        }
+      )
+    end
+
     it "includes micro cluster data in JSON format" do
-      clusterer = described_class.new(micro_cluster.id)
+      subject.perform
+
+      transcript = subject.agent_log.transcript
       data_message =
-        clusterer.transcript.find { |msg| msg[:user] && msg[:user].include?("data for the ink") }[
-          :user
-        ]
+        transcript.find { |msg| msg["content"]&.include?("data for the ink") }["content"]
 
       parsed_data = JSON.parse(data_message.split("This is the data for the ink to cluster: ").last)
 
@@ -687,13 +705,12 @@ RSpec.describe InkClusterer do
     end
 
     it "includes colors when present" do
-      # Mock the colors method to return specific colors before creating clusterer
       allow_any_instance_of(MicroCluster).to receive(:colors).and_return(%w[blue navy])
-      clusterer = described_class.new(micro_cluster.id)
+      subject.perform
+
+      transcript = subject.agent_log.transcript
       data_message =
-        clusterer.transcript.find { |msg| msg[:user] && msg[:user].include?("data for the ink") }[
-          :user
-        ]
+        transcript.find { |msg| msg["content"]&.include?("data for the ink") }["content"]
 
       parsed_data = JSON.parse(data_message.split("This is the data for the ink to cluster: ").last)
 
@@ -701,13 +718,12 @@ RSpec.describe InkClusterer do
     end
 
     it "excludes colors when not present" do
-      # Mock colors to return empty array to simulate no colors
       allow_any_instance_of(MicroCluster).to receive(:colors).and_return([])
-      clusterer = described_class.new(micro_cluster.id)
+      subject.perform
+
+      transcript = subject.agent_log.transcript
       data_message =
-        clusterer.transcript.find { |msg| msg[:user] && msg[:user].include?("data for the ink") }[
-          :user
-        ]
+        transcript.find { |msg| msg["content"]&.include?("data for the ink") }["content"]
 
       parsed_data = JSON.parse(data_message.split("This is the data for the ink to cluster: ").last)
 
@@ -725,7 +741,7 @@ RSpec.describe InkClusterer do
       end
 
       it "raises an error" do
-        expect { subject.perform }.to raise_error(Faraday::ServerError)
+        expect { subject.perform }.to raise_error(RubyLLM::ServerError)
       end
     end
 
@@ -883,14 +899,9 @@ RSpec.describe InkClusterer do
       it "includes information about previous rejected attempts" do
         subject.perform
 
-        # Check that the transcript includes processed tries information
+        transcript = subject.agent_log.transcript
         processed_tries_message =
-          subject
-            .transcript
-            .select { |msg| msg[:user] && msg[:user].include?("processed before") }
-            .last[
-            :user
-          ]
+          transcript.find { |msg| msg["content"]&.include?("processed before") }["content"]
 
         expect(processed_tries_message).to include("processed before 2 times")
         expect(processed_tries_message).to include("Assigning ink to existing cluster")
@@ -946,35 +957,23 @@ RSpec.describe InkClusterer do
         )
       end
 
-      it "sends micro cluster data that can be used for similarity search" do
+      it "sends system directive about clustering" do
         subject.perform
 
         expect(WebMock).to have_requested(:post, "https://api.openai.com/v1/chat/completions")
           .with { |req|
             body = JSON.parse(req.body)
-            content = body["messages"].first["content"]
+            messages = body["messages"]
+            system_msg = messages.find { |m| m["role"] == "developer" || m["role"] == "system" }
 
-            # Should include system directive about clustering
-            expect(content).to include("clustering algorithm")
-            expect(content).to include("similar inks together")
-            expect(content).to include("assign the ink to that cluster")
-            expect(content).to include("create a new cluster")
-
-            true
-          }
-          .at_least_once
-      end
-
-      it "includes instructions about web search capabilities" do
-        subject.perform
-
-        expect(WebMock).to have_requested(:post, "https://api.openai.com/v1/chat/completions")
-          .with { |req|
-            body = JSON.parse(req.body)
-            content = body["messages"].first["content"]
-
-            expect(content).to include("search the web for it")
-            expect(content).to include("help you termine if you should assign the ink")
+            expect(system_msg["content"]).to include("clustering algorithm")
+            expect(system_msg["content"]).to include("similar inks together")
+            expect(system_msg["content"]).to include("assign the ink to that cluster")
+            expect(system_msg["content"]).to include("create a new cluster")
+            expect(system_msg["content"]).to include("search the web for it")
+            expect(system_msg["content"]).to include(
+              "help you termine if you should assign the ink"
+            )
 
             true
           }
@@ -983,42 +982,92 @@ RSpec.describe InkClusterer do
     end
 
     context "with brand validation" do
+      let(:brand_check_response) do
+        {
+          "id" => "chatcmpl-brand",
+          "object" => "chat.completion",
+          "created" => 1_677_652_288,
+          "model" => "gpt-4.1",
+          "choices" => [
+            {
+              "index" => 0,
+              "message" => {
+                "role" => "assistant",
+                "content" => "",
+                "tool_calls" => [
+                  {
+                    "id" => "call_brand",
+                    "type" => "function",
+                    "function" => {
+                      "name" => "known_brand",
+                      "arguments" => {}.to_json
+                    }
+                  }
+                ]
+              },
+              "finish_reason" => "tool_calls"
+            }
+          ],
+          "usage" => {
+            "prompt_tokens" => 200,
+            "completion_tokens" => 20,
+            "total_tokens" => 220
+          }
+        }
+      end
+
+      let(:assign_after_brand_response) do
+        {
+          "id" => "chatcmpl-assign-after-brand",
+          "object" => "chat.completion",
+          "created" => 1_677_652_288,
+          "model" => "gpt-4.1",
+          "choices" => [
+            {
+              "index" => 0,
+              "message" => {
+                "role" => "assistant",
+                "content" => "",
+                "tool_calls" => [
+                  {
+                    "id" => "call_assign_after",
+                    "type" => "function",
+                    "function" => {
+                      "name" => "assign_to_cluster",
+                      "arguments" => {
+                        "cluster_id" => existing_macro_cluster.id,
+                        "explanation_of_decision" => "Brand is known, assigning."
+                      }.to_json
+                    }
+                  }
+                ]
+              },
+              "finish_reason" => "tool_calls"
+            }
+          ],
+          "usage" => {
+            "prompt_tokens" => 250,
+            "completion_tokens" => 30,
+            "total_tokens" => 280
+          }
+        }
+      end
+
       before(:each) do
         stub_request(:post, "https://api.openai.com/v1/chat/completions").to_return(
-          status: 200,
-          body: {
-            "id" => "chatcmpl-brand",
-            "object" => "chat.completion",
-            "created" => 1_677_652_288,
-            "model" => "gpt-4.1",
-            "choices" => [
-              {
-                "index" => 0,
-                "message" => {
-                  "role" => "assistant",
-                  "content" => "",
-                  "tool_calls" => [
-                    {
-                      "id" => "call_brand",
-                      "type" => "function",
-                      "function" => {
-                        "name" => "known_brand",
-                        "arguments" => {}.to_json
-                      }
-                    }
-                  ]
-                },
-                "finish_reason" => "tool_calls"
-              }
-            ],
-            "usage" => {
-              "prompt_tokens" => 200,
-              "completion_tokens" => 20,
-              "total_tokens" => 220
+          {
+            status: 200,
+            body: brand_check_response.to_json,
+            headers: {
+              "Content-Type" => "application/json"
             }
-          }.to_json,
-          headers: {
-            "Content-Type" => "application/json"
+          },
+          {
+            status: 200,
+            body: assign_after_brand_response.to_json,
+            headers: {
+              "Content-Type" => "application/json"
+            }
           }
         )
       end
@@ -1044,9 +1093,8 @@ RSpec.describe InkClusterer do
     context "with existing transcript" do
       let(:existing_transcript) do
         [
-          { system: "Previous system message" },
-          { user: "Previous user message" },
-          { assistant: "Previous assistant response" }
+          { "role" => "user", "content" => "Previous user message" },
+          { "role" => "assistant", "content" => "Previous assistant response" }
         ]
       end
 
@@ -1060,17 +1108,11 @@ RSpec.describe InkClusterer do
 
         clusterer = described_class.new(micro_cluster.id, agent_log_id: agent_log.id)
 
-        expect(clusterer.transcript.to_a).to eq(existing_transcript)
+        # RubyLlmAgent restores non-system messages from transcript
+        messages = clusterer.chat.messages
+        user_msg = messages.find { |m| m.role == :user }
+        expect(user_msg.content).to eq("Previous user message")
       end
-    end
-
-    it "creates fresh transcript when none exists" do
-      clusterer = described_class.new(micro_cluster.id)
-
-      expect(clusterer.transcript.first[:system]).to include("clustering algorithm")
-      expect(clusterer.transcript.find { |msg| msg[:user] }[:user]).to include(
-        "data for the ink to cluster"
-      )
     end
   end
 
@@ -1139,10 +1181,9 @@ RSpec.describe InkClusterer do
       it "handles special characters in ink data" do
         subject.perform
 
+        transcript = subject.agent_log.transcript
         data_message =
-          subject.transcript.find { |msg| msg[:user] && msg[:user].include?("data for the ink") }[
-            :user
-          ]
+          transcript.find { |msg| msg["content"]&.include?("data for the ink") }["content"]
         parsed_data =
           JSON.parse(data_message.split("This is the data for the ink to cluster: ").last)
 
@@ -1209,10 +1250,9 @@ RSpec.describe InkClusterer do
       it "handles very long ink names" do
         expect { subject.perform }.not_to raise_error
 
+        transcript = subject.agent_log.transcript
         data_message =
-          subject.transcript.find { |msg| msg[:user] && msg[:user].include?("data for the ink") }[
-            :user
-          ]
+          transcript.find { |msg| msg["content"]&.include?("data for the ink") }["content"]
         expect(data_message).to include("A" * 50)
         expect(data_message).to include("B" * 50)
       end
