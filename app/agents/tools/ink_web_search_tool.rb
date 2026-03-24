@@ -1,6 +1,6 @@
 module Tools
   class InkWebSearchTool < RubyLLM::Tool
-    description "Search the web"
+    description "Search the web for an ink. The word 'ink' is automatically appended to the search query."
 
     def name = "search_web"
 

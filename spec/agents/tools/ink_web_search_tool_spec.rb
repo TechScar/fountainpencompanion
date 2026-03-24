@@ -9,7 +9,9 @@ RSpec.describe Tools::InkWebSearchTool do
   end
 
   it "has the correct description" do
-    expect(subject.description).to eq("Search the web")
+    expect(subject.description).to eq(
+      "Search the web for an ink. The word 'ink' is automatically appended to the search query."
+    )
   end
 
   it "appends 'ink' to the search query and delegates to GoogleSearchSummarizer" do
