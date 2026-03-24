@@ -1,4 +1,5 @@
 JSONAPI::Rails.configure do |config|
+  config.logger = Logger.new($stderr, level: :warn) if ::Rails.env.test?
   # # Set a default serializable class mapping.
   # config.jsonapi_class = Hash.new { |h, k|
   #   names = k.to_s.split('::')

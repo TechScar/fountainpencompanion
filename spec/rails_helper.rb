@@ -6,6 +6,7 @@ require "spec_helper"
 require "rspec/rails"
 
 Sidekiq.testing!(:fake)
+Sidekiq.logger.level = Logger::WARN
 
 Dir[Rails.root.join("spec/support/**/*.rb")].each { |f| require f }
 
