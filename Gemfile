@@ -60,7 +60,6 @@ gem "strong_migrations"
 
 group :development, :test do
   gem "byebug", platform: :mri
-  gem "dotenv-rails"
   gem "factory_bot_rails"
   gem "letter_opener"
   gem "letter_opener_web"
