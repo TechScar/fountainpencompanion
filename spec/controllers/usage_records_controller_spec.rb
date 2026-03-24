@@ -65,7 +65,7 @@ describe UsageRecordsController do
                used_on: 1.day.from_now.to_date.to_s
              },
              format: :json
-        expect(response).to have_http_status(:unprocessable_entity)
+        expect(response).to have_http_status(:unprocessable_content)
       end
 
       it "returns not_found for missing currently_inked" do

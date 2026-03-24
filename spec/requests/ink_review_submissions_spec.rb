@@ -48,7 +48,7 @@ describe "InkReviewSubmissions" do
                }
              },
              as: :json
-        expect(response).to have_http_status(:unprocessable_entity)
+        expect(response).to have_http_status(:unprocessable_content)
         json = JSON.parse(response.body)
         expect(json["errors"].first).to include("Instagram URLs are not supported")
       end
