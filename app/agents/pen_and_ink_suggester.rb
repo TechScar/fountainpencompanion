@@ -1,10 +1,45 @@
 require "csv"
 
 class PenAndInkSuggester
-  include Raix::ChatCompletion
-  include Raix::FunctionDispatch
-  include AgentTranscript
-  include ConfigureToken
+  include RubyLlmAgent
+
+  class RecordSuggestion < RubyLLM::Tool
+    description "Output for the end user. Must contain a markdown formatted suggestion for a pen and ink combination, " \
+                  "along with the IDs of the suggested pen and ink."
+
+    def name = "record_suggestion"
+
+    param :suggestion, desc: "Markdown formatted pen and ink suggestion"
+    param :ink_id, type: "integer", desc: "ID of the suggested ink"
+    param :pen_id, type: "integer", desc: "ID of the suggested pen"
+
+    attr_accessor :inks, :pens, :message, :result_ink_id, :result_pen_id
+
+    def initialize(inks, pens)
+      self.inks = inks
+      self.pens = pens
+    end
+
+    def execute(suggestion:, ink_id:, pen_id:)
+      ink = inks.find { |i| i.id == ink_id }
+      pen = pens.find { |p| p.id == pen_id }
+
+      if ink && pen && suggestion.present?
+        self.message = suggestion
+        self.result_ink_id = ink_id
+        self.result_pen_id = pen_id
+        halt "Suggestion recorded"
+      elsif ink.blank? && pen.blank?
+        "Please try again. Both the pen and ink IDs are invalid."
+      elsif ink.blank?
+        "Please try again. The ink ID is invalid."
+      elsif pen.blank?
+        "Please try again. The pen ID is invalid."
+      elsif suggestion.blank?
+        "Please try again. The suggestion message is blank."
+      end
+    end
+  end
 
   LIMIT = 50
   LIMIT_PATRON = 100
@@ -15,18 +50,16 @@ class PenAndInkSuggester
   def initialize(user, extra_user_input = nil, hidden_input = nil)
     self.user = user
     self.extra_user_input = extra_user_input
-    transcript << { user: prompt }
-    transcript << { user: additional_premium_prompt } if premium?
-    transcript << { user: extra_user_prompt } if extra_user_input.present?
-    transcript << { user: hidden_input } if hidden_input.present?
+    self.hidden_input = hidden_input
   end
 
   def perform
     response =
       if can_perform?
-        chat_completion(openai: model_name)
-        if [message, ink_id, pen_id].all?(&:present?)
-          { message:, ink: ink_id, pen: pen_id }
+        ask(user_prompt)
+        tool = record_suggestion_tool
+        if [tool.message, tool.result_ink_id, tool.result_pen_id].all?(&:present?)
+          { message: tool.message, ink: tool.result_ink_id, pen: tool.result_pen_id }
         else
           { message: "Sorry, that didn't work. Please try again!" }
         end
@@ -42,46 +75,31 @@ class PenAndInkSuggester
     @agent_log ||= AgentLog.create!(name: self.class.name, transcript: [], owner: user)
   end
 
-  function :record_suggestion,
-           "Output for the end user. Must contain a markdown formatted suggestion for a pen and ink combination,
-    along with the IDs of the suggested pen and ink.",
-           suggestion: {
-             type: "string",
-             description: "Markdown formatted pen and ink suggestion",
-             required: true
-           },
-           ink_id: {
-             type: "integer",
-             description: "ID of the suggested ink",
-             required: true
-           },
-           pen_id: {
-             type: "integer",
-             description: "ID of the suggested pen",
-             required: true
-           } do |arguments|
-    self.message = arguments[:suggestion]
-    self.ink_id = arguments[:ink_id]
-    self.pen_id = arguments[:pen_id]
-
-    ink = inks.find { |ink| ink.id == ink_id }
-    pen = pens.find { |pen| pen.id == pen_id }
-    if ink && pen && message.present?
-      stop_tool_calls_and_respond!
-    elsif ink.blank? && pen.blank?
-      "Please try again. Both the pen and ink IDs are invalid."
-    elsif ink.blank?
-      "Please try again. The ink ID is invalid."
-    elsif pen.blank?
-      "Please try again. The pen ID is invalid."
-    elsif message.blank?
-      "Please try again. The suggestion message is blank."
-    end
-  end
-
   private
 
-  attr_accessor :user, :message, :ink_id, :pen_id, :extra_user_input
+  attr_accessor :user, :extra_user_input, :hidden_input
+
+  def model_id
+    premium? ? "gpt-4.1" : "gpt-4.1-mini"
+  end
+
+  def system_directive = ""
+
+  def record_suggestion_tool
+    @record_suggestion_tool ||= RecordSuggestion.new(inks, pens)
+  end
+
+  def tools
+    [record_suggestion_tool]
+  end
+
+  def user_prompt
+    parts = [prompt]
+    parts << additional_premium_prompt if premium?
+    parts << extra_user_prompt if extra_user_input.present?
+    parts << hidden_input if hidden_input.present?
+    parts.join("\n\n")
+  end
 
   def prompt
     <<~MESSAGE
@@ -222,19 +240,14 @@ class PenAndInkSuggester
 
   def inks
     @inks ||=
-      begin
-        rel =
-          user.collected_inks.active.includes(
-            :currently_inkeds,
-            :usage_records,
-            micro_cluster: {
-              macro_cluster: :brand_cluster
-            },
-            newest_currently_inked: :last_usage
-          )
-
-        rel
-      end
+      user.collected_inks.active.includes(
+        :currently_inkeds,
+        :usage_records,
+        micro_cluster: {
+          macro_cluster: :brand_cluster
+        },
+        newest_currently_inked: :last_usage
+      )
   end
 
   def today_usage_count
@@ -261,10 +274,6 @@ class PenAndInkSuggester
     return LIMIT_ADMIN if user.admin?
 
     premium? ? LIMIT_PATRON : LIMIT
-  end
-
-  def model_name
-    premium? ? "gpt-4.1" : "gpt-4.1-mini"
   end
 
   def premium?
