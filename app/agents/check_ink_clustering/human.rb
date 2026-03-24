@@ -2,8 +2,6 @@ class CheckInkClustering::Human < CheckInkClustering::Base
   class SendEmail < RubyLLM::Tool
     description "Send email to human reviewer"
 
-    def name = "send_email"
-
     param :subject, desc: "Subject of the email"
     param :body, desc: "Body of the email"
 
@@ -15,8 +13,6 @@ class CheckInkClustering::Human < CheckInkClustering::Base
 
   class PreviousAgentLogs < RubyLLM::Tool
     description "All logs of interactions with respect to clustering of this ink"
-
-    def name = "previous_agent_logs"
 
     attr_accessor :micro_cluster_agent_log, :agent_log
 

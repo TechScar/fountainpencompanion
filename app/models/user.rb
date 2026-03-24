@@ -20,6 +20,7 @@ class User < ApplicationRecord
   has_many :reading_statuses, dependent: :destroy
   has_many :ink_review_submissions, dependent: :destroy
   has_many :leader_board_rows, dependent: :destroy
+  has_many :agent_logs, as: :owner, dependent: :destroy
 
   validates :name, length: { in: 1..100, allow_blank: true }
 

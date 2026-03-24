@@ -4,8 +4,6 @@ class ReviewApprover
   class ApproveReview < RubyLLM::Tool
     description "Approve the review to make it customer visible"
 
-    def name = "approve_review"
-
     param :explanation_of_decision,
           desc: "Provide a brief explanation of why you are approving this review."
 
@@ -30,8 +28,6 @@ class ReviewApprover
 
   class RejectReview < RubyLLM::Tool
     description "Reject the review to ensure it is hidden from public view"
-
-    def name = "reject_review"
 
     param :explanation_of_decision,
           desc: "Provide a brief explanation of why you are rejecting this review."
@@ -58,8 +54,6 @@ class ReviewApprover
   class Summarize < RubyLLM::Tool
     description "Return a summary of the web page"
 
-    def name = "summarize"
-
     attr_accessor :ink_review, :agent_log
 
     def initialize(ink_review, agent_log)
@@ -77,6 +71,8 @@ class ReviewApprover
       end
     end
   end
+
+  MODEL_ID = "gpt-4.1-mini"
 
   SYSTEM_DIRECTIVE = <<~TEXT
     Your task is to check if the given data is a review of the ink specified or not.
@@ -108,18 +104,13 @@ class ReviewApprover
     agent_log.waiting_for_approval!
   end
 
-  def agent_log
-    @agent_log ||= ink_review.agent_logs.create!(name: self.class.name, transcript: [])
-  end
+  def agent_log = find_or_create_agent_log(ink_review)
 
   private
 
   attr_accessor :ink_review
 
   delegate :macro_cluster, to: :ink_review
-
-  def model_id = "gpt-4.1-mini"
-  def system_directive = SYSTEM_DIRECTIVE
 
   def tools
     [

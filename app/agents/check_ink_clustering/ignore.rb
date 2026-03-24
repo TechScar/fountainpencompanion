@@ -2,8 +2,6 @@ class CheckInkClustering::Ignore < CheckInkClustering::Base
   class ApproveClusterCreation < RubyLLM::Tool
     description "Approve ignoring of this ink"
 
-    def name = "approve_cluster_creation"
-
     param :explanation_of_decision, desc: "Explanation of why ignoring the ink was approved"
 
     attr_accessor :agent_log
@@ -25,8 +23,6 @@ class CheckInkClustering::Ignore < CheckInkClustering::Base
 
   class RejectClusterCreation < RubyLLM::Tool
     description "Reject ignoring of this ink"
-
-    def name = "reject_cluster_creation"
 
     param :explanation_of_decision, desc: "Explanation of why ignoring the ink was rejected"
 

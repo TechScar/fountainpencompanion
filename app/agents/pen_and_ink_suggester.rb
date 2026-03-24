@@ -7,8 +7,6 @@ class PenAndInkSuggester
     description "Output for the end user. Must contain a markdown formatted suggestion for a pen and ink combination, " \
                   "along with the IDs of the suggested pen and ink."
 
-    def name = "record_suggestion"
-
     param :suggestion, desc: "Markdown formatted pen and ink suggestion"
     param :ink_id, type: "integer", desc: "ID of the suggested ink"
     param :pen_id, type: "integer", desc: "ID of the suggested pen"
@@ -71,9 +69,7 @@ class PenAndInkSuggester
     response
   end
 
-  def agent_log
-    @agent_log ||= AgentLog.create!(name: self.class.name, transcript: [], owner: user)
-  end
+  def agent_log = find_or_create_agent_log(user)
 
   private
 

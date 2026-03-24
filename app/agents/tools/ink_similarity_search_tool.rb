@@ -2,8 +2,6 @@ module Tools
   class InkSimilaritySearchTool < RubyLLM::Tool
     description "Find the 20 most similar ink clusters by cosine distance"
 
-    def name = "ink_similarity_search"
-
     param :search_string, desc: "The search string to find similar inks"
 
     def execute(search_string:)

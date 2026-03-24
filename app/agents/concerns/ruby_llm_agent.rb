@@ -2,11 +2,9 @@ module RubyLlmAgent
   extend ActiveSupport::Concern
 
   included do
-    %i[agent_log model_id system_directive tools].each do |method|
-      unless method_defined?(method) || private_method_defined?(method)
-        define_method(method) do
-          raise NotImplementedError, "#{self.class} must implement ##{method}"
-        end
+    unless method_defined?(:agent_log) || private_method_defined?(:agent_log)
+      define_method(:agent_log) do
+        raise NotImplementedError, "#{self.class} must implement #agent_log"
       end
     end
   end
@@ -23,13 +21,24 @@ module RubyLlmAgent
     chat.complete
   end
 
+  def find_or_create_agent_log(owner)
+    @agent_log ||= owner.agent_logs.processing.where(name: self.class.name).first
+    @agent_log ||= owner.agent_logs.create!(name: self.class.name, transcript: [])
+  end
+
   private
 
-  # Agents must implement these methods:
-  # - agent_log   → AgentLog instance
-  # - model_id    → string (e.g., "gpt-4.1-mini")
-  # - system_directive → string (system prompt)
-  # - tools       → array of RubyLLM::Tool subclasses (can be empty)
+  def model_id
+    self.class::MODEL_ID
+  end
+
+  def system_directive
+    self.class::SYSTEM_DIRECTIVE
+  end
+
+  def tools
+    []
+  end
 
   def build_chat
     c = ruby_llm_context.chat(model: model_id)
