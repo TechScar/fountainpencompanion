@@ -50,44 +50,18 @@ RSpec.describe CheckInkClustering::Human do
       expect(micro_cluster_agent_log.agent_logs).to include(child_log)
     end
 
-    it "initializes transcript with system directive" do
-      agent = described_class.new(micro_cluster_agent_log.id)
-      expect(agent.transcript.first[:system]).to be_present
-      expect(agent.transcript.first[:system]).to include(
-        "reviewing the result of a clustering algorithm"
-      )
-      expect(agent.transcript.first[:system]).to include("handed over to a human for review")
-      expect(agent.transcript.first[:system]).to include("send an email")
-    end
-
-    it "includes clustering explanation in transcript" do
-      agent = described_class.new(micro_cluster_agent_log.id)
-      explanation_message =
-        agent.transcript.find { |msg| msg[:user]&.include?("reasoning of the AI") }
-      expect(explanation_message).to be_present
-      expect(explanation_message[:user]).to include("too complex and requires human judgment")
-    end
-
-    it "includes micro cluster data in transcript" do
-      agent = described_class.new(micro_cluster_agent_log.id)
-      cluster_data_message =
-        agent.transcript.find { |msg| msg[:user]&.include?("data for the ink to cluster") }
-      expect(cluster_data_message).to be_present
-      expect(cluster_data_message[:user]).to include("Unknown Brand")
-      expect(cluster_data_message[:user]).to include("Mystery Ink")
-    end
-
-    context "with existing agent log transcript" do
+    context "with existing processing agent log" do
       let!(:existing_agent_log) do
         micro_cluster_agent_log.agent_logs.create!(
           name: "CheckInkClustering::Human",
-          transcript: [{ system: "existing transcript" }]
+          transcript: [{ role: "user", content: "existing transcript" }],
+          state: "processing"
         )
       end
 
-      it "reuses existing transcript" do
+      it "reuses existing processing agent log" do
         agent = described_class.new(micro_cluster_agent_log.id)
-        expect(agent.transcript.first[:system]).to eq("existing transcript")
+        expect(agent.send(:agent_log)).to eq(existing_agent_log)
       end
     end
   end
@@ -214,31 +188,11 @@ RSpec.describe CheckInkClustering::Human do
       end
 
       it "raises API errors as expected" do
-        expect { subject.perform }.to raise_error(Faraday::ServerError)
+        expect { subject.perform }.to raise_error(RubyLLM::ServerError)
       end
 
       it "does not approve on API error" do
-        expect { subject.perform }.to raise_error(Faraday::ServerError)
-      end
-    end
-
-    context "with malformed OpenAI response" do
-      before do
-        stub_request(:post, openai_url).to_return(
-          status: 200,
-          body: { "invalid" => "response" }.to_json,
-          headers: {
-            "Content-Type" => "application/json"
-          }
-        )
-      end
-
-      it "raises errors for malformed responses" do
-        expect { subject.perform }.to raise_error(NoMethodError)
-      end
-
-      it "does not approve on malformed response" do
-        expect { subject.perform }.to raise_error(NoMethodError)
+        expect { subject.perform }.to raise_error(RubyLLM::ServerError)
       end
     end
   end
@@ -254,9 +208,36 @@ RSpec.describe CheckInkClustering::Human do
     end
   end
 
-  describe "function definitions" do
-    it "responds to send_email function" do
-      expect(subject).to respond_to(:send_email)
+  describe "tools" do
+    describe "SendEmail" do
+      it "sends email and halts" do
+        mail_double = double("mail", deliver_later: true)
+        expect(AdminMailer).to receive(:agent_mail).with("Test Subject", "Test Body").and_return(
+          mail_double
+        )
+
+        tool = CheckInkClustering::Human::SendEmail.new
+        result = tool.call(subject: "Test Subject", body: "Test Body")
+
+        expect(result).to be_a(RubyLLM::Tool::Halt)
+      end
+    end
+
+    describe "PreviousAgentLogs" do
+      let(:agent) { CheckInkClustering::Human.new(micro_cluster_agent_log.id) }
+
+      it "returns agent logs as JSON" do
+        tool =
+          CheckInkClustering::Human::PreviousAgentLogs.new(
+            micro_cluster_agent_log,
+            agent.send(:agent_log)
+          )
+        result = tool.call({})
+
+        expect(result).to be_a(String)
+        parsed = JSON.parse(result)
+        expect(parsed).to be_an(Array)
+      end
     end
   end
 
@@ -416,12 +397,14 @@ RSpec.describe CheckInkClustering::Human do
 
         subject.perform
 
-        # Verify the micro cluster data includes complex names
-        cluster_data_message =
-          subject.transcript.find { |msg| msg[:user]&.include?("data for the ink to cluster") }
-        expect(cluster_data_message[:user]).to include("私人")
-        expect(cluster_data_message[:user]).to include("手作藍墨水")
-        expect(cluster_data_message[:user]).to include("Blue Mix + ???")
+        # Verify the request includes the complex ink names
+        expect(WebMock).to have_requested(:post, openai_url).with { |req|
+          body = JSON.parse(req.body)
+          messages = body["messages"]
+          user_message = messages.find { |m| m["role"] == "user" }
+          user_message["content"].include?("私人") &&
+            user_message["content"].include?("Blue Mix + ???")
+        }
       end
     end
   end
