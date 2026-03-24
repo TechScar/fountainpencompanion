@@ -13,6 +13,16 @@ jobs:
       PGHOST: localhost
       PGPORT: 5432
       DATABASE_URL: postgres://test@localhost/fountainpencompanion_test
+      OPEN_AI_TOKEN: test
+      OPEN_AI_EMBEDDINGS: test
+      OPEN_AI_PEN_AND_INK_SUGGESTION: test
+      OPEN_AI_SPAM_CLASSIFIER: test
+      GOOGLE_CREDENTIALS: "{}"
+      GOOGLE_CLIENT_SECRETS: "{}"
+      HCAPTCHA_SECRET: test
+      HCAPTCHA_SITE_KEY: test
+      GOOGLE_SEARCH_API_KEY: test
+      GOOGLE_SEARCH_ENGINE_ID: test
 
     runs-on: ubuntu-latest
 
