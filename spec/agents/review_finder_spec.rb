@@ -1,8 +1,7 @@
 require "rails_helper"
 
 RSpec.describe ReviewFinder do
-  before(:each) do
-    WebMock.reset!
+  before do
     Sidekiq::Testing.fake!
     Sidekiq::Worker.clear_all
   end
@@ -53,41 +52,6 @@ RSpec.describe ReviewFinder do
       finder = described_class.new(page)
       expect(finder.agent_log.name).to eq("ReviewFinder")
     end
-
-    it "initializes transcript with system directive" do
-      finder = described_class.new(page)
-      transcript_messages = finder.transcript.to_a
-
-      system_message = transcript_messages.find { |msg| msg.key?(:system) }
-      expect(system_message).to be_present
-      expect(system_message[:system]).to include("fountain pen inks")
-      expect(system_message[:system]).to include("similarity")
-      expect(system_message[:system]).to include("search")
-    end
-
-    it "includes user message in transcript" do
-      finder = described_class.new(page)
-      transcript_messages = finder.transcript.to_a
-
-      user_message = transcript_messages.find_all { |msg| msg.key?(:user) }.last
-      expect(user_message).to be_present
-      expect(user_message[:user]).to include("page data")
-    end
-
-    it "uses existing transcript when present" do
-      existing_transcript = [
-        { system: "Existing system message" },
-        { user: "Existing user message" }
-      ]
-      page.agent_logs.create!(
-        name: "ReviewFinder",
-        transcript: existing_transcript,
-        state: "processing"
-      )
-
-      finder = described_class.new(page)
-      expect(finder.transcript.to_a).to eq(existing_transcript)
-    end
   end
 
   describe "#agent_log" do
@@ -115,134 +79,111 @@ RSpec.describe ReviewFinder do
     end
   end
 
-  describe "#perform" do
-    it "calls chat_completion with correct model" do
-      expect(subject).to receive(:chat_completion).with(openai: "gpt-4.1")
-      expect(subject.agent_log).to receive(:waiting_for_approval!)
+  describe "tools" do
+    let(:tool_agent_log) { AgentLog.create!(name: "test", transcript: [], owner: page) }
 
-      subject.perform
+    describe ReviewFinder::SubmitReview do
+      it "has the correct name" do
+        tool = described_class.new(page)
+        expect(tool.name).to eq("submit_review")
+      end
+
+      it "has the correct description" do
+        tool = described_class.new(page)
+        expect(tool.description).to eq("Submit a review for the ink clusters")
+      end
+
+      it "enqueues review submission job when cluster exists" do
+        tool = described_class.new(page)
+        result = tool.call(ink_cluster_id: macro_cluster.id, explanation: "This is about the ink")
+
+        expect(result).to include("submitted the review")
+        expect(result).to include(macro_cluster.name)
+
+        matching_jobs =
+          FetchReviews::SubmitReview.jobs.select do |job|
+            job["args"][0] == page.url && job["args"][1] == macro_cluster.id
+          end
+        expect(matching_jobs.size).to eq(1)
+        expect(matching_jobs.first["args"][2]).to eq("This is about the ink")
+      end
+
+      it "returns a string (not Halt) to allow the conversation to continue" do
+        tool = described_class.new(page)
+        result = tool.call(ink_cluster_id: macro_cluster.id, explanation: "Test")
+
+        expect(result).to be_a(String)
+        expect(result).not_to be_a(RubyLLM::Tool::Halt)
+      end
+
+      it "returns error message when cluster not found" do
+        tool = described_class.new(page)
+        result = tool.call(ink_cluster_id: 99_999, explanation: "Test")
+
+        expect(result).to include("couldn't find")
+        expect(result).to include("99999")
+        expect(FetchReviews::SubmitReview.jobs).to be_empty
+      end
     end
 
-    it "updates agent log state to waiting for approval" do
-      allow(subject).to receive(:chat_completion)
+    describe ReviewFinder::Done do
+      it "has the correct name" do
+        tool = described_class.new(tool_agent_log)
+        expect(tool.name).to eq("done")
+      end
 
-      subject.perform
+      it "has the correct description" do
+        tool = described_class.new(tool_agent_log)
+        expect(tool.description).to eq("Call this if you are done submitting all reviews")
+      end
 
-      expect(subject.agent_log.state).to eq("waiting-for-approval")
+      it "updates extra_data and halts" do
+        tool = described_class.new(tool_agent_log)
+        result = tool.call(summary: "No reviews found")
+
+        expect(result).to be_a(RubyLLM::Tool::Halt)
+        expect(tool_agent_log.reload.extra_data["summary"]).to eq("No reviews found")
+      end
     end
-  end
 
-  describe "error handling" do
-    context "when Unfurler raises an error" do
-      it "allows the error to propagate during initialization" do
-        allow_any_instance_of(Unfurler).to receive(:perform).and_raise(
-          StandardError,
-          "Network error"
+    describe ReviewFinder::Summarize do
+      it "has the correct name" do
+        tool = described_class.new(unfurler_result, tool_agent_log)
+        expect(tool.name).to eq("summarize")
+      end
+
+      it "has the correct description" do
+        tool = described_class.new(unfurler_result, tool_agent_log)
+        expect(tool.description).to eq("Return a summary of the web page")
+      end
+
+      it "summarizes non-YouTube pages via WebPageSummarizer" do
+        allow(WebPageSummarizer).to receive(:new).with(
+          tool_agent_log,
+          unfurler_result.raw_html
+        ).and_return(double(perform: "This page is about fountain pen ink reviews."))
+
+        tool = described_class.new(unfurler_result, tool_agent_log)
+        result = tool.call({})
+
+        expect(result).to eq(
+          "Here is a summary of the page:\n\nThis page is about fountain pen ink reviews."
         )
+      end
 
-        expect { described_class.new(page) }.to raise_error(StandardError, "Network error")
+      it "returns message for YouTube videos without calling WebPageSummarizer" do
+        allow(WebPageSummarizer).to receive(:new)
+
+        tool = described_class.new(youtube_unfurler_result, tool_agent_log)
+        result = tool.call({})
+
+        expect(result).to eq("This is a Youtube video. I can't summarize it.")
+        expect(WebPageSummarizer).not_to have_received(:new)
       end
     end
   end
 
-  describe "integration scenarios" do
-    context "with YouTube videos" do
-      let(:youtube_page) do
-        create(:web_page_for_review, url: "https://www.youtube.com/watch?v=abc123")
-      end
-
-      before do
-        allow_any_instance_of(Unfurler).to receive(:perform).and_return(youtube_unfurler_result)
-      end
-
-      it "can process YouTube video pages" do
-        finder = described_class.new(youtube_page)
-
-        expect(finder.agent_log).to be_persisted
-        expect(finder.agent_log.owner).to eq(youtube_page)
-        expect(finder.transcript.to_a).not_to be_empty
-      end
-
-      it "includes YouTube URL in transcript" do
-        finder = described_class.new(youtube_page)
-        transcript_messages = finder.transcript.to_a
-
-        user_message = transcript_messages.find_all { |msg| msg.key?(:user) }.last
-        expect(user_message[:user]).to include("youtube.com")
-      end
-    end
-
-    context "complete workflow" do
-      it "can be initialized and performed" do
-        finder = described_class.new(page)
-        allow(finder).to receive(:chat_completion)
-
-        expect(finder.agent_log.state).to eq("processing")
-
-        finder.perform
-
-        expect(finder.agent_log.state).to eq("waiting-for-approval")
-      end
-
-      it "has all necessary components for review processing" do
-        finder = described_class.new(page)
-
-        # Verify page is accessible
-        expect(finder.agent_log.owner).to eq(page)
-
-        # Verify transcript is initialized
-        expect(finder.transcript.to_a).not_to be_empty
-
-        # Verify cluster exists for potential submission
-        expect(macro_cluster).to be_persisted
-        expect(macro_cluster.name).to be_present
-      end
-    end
-  end
-
-  describe "transcript management" do
-    it "includes system directive in transcript" do
-      system_message = subject.transcript.to_a.find { |msg| msg.key?(:system) }
-
-      expect(system_message[:system]).to eq(described_class::SYSTEM_DIRECTIVE)
-    end
-
-    it "includes page data in user message" do
-      user_message = subject.transcript.to_a.find_all { |msg| msg.key?(:user) }.last
-
-      expect(user_message[:user]).to include("page data")
-      expect(user_message[:user]).to include(page.url)
-    end
-
-    it "preserves existing transcript when agent_log has one" do
-      existing_transcript = [{ system: "Custom system message" }, { user: "Custom user message" }]
-
-      page.agent_logs.create!(
-        name: "ReviewFinder",
-        transcript: existing_transcript,
-        state: "processing"
-      )
-
-      finder = described_class.new(page)
-      expect(finder.transcript.to_a).to eq(existing_transcript)
-    end
-  end
-
-  describe "state transitions" do
-    it "starts in processing state" do
-      expect(subject.agent_log.state).to eq("processing")
-    end
-
-    it "transitions to waiting-for-approval after perform" do
-      allow(subject).to receive(:chat_completion)
-
-      subject.perform
-
-      expect(subject.agent_log.reload.state).to eq("waiting-for-approval")
-    end
-  end
-
-  describe "OpenAI integration and tool calls" do
+  describe "#perform" do
     let(:openai_url) { "https://api.openai.com/v1/chat/completions" }
 
     context "when AI decides to submit a review" do
@@ -284,12 +225,57 @@ RSpec.describe ReviewFinder do
         }
       end
 
+      let(:done_after_submit_response) do
+        {
+          "id" => "chatcmpl-done-after-submit",
+          "object" => "chat.completion",
+          "created" => 1_677_652_289,
+          "model" => "gpt-4.1",
+          "choices" => [
+            {
+              "index" => 0,
+              "message" => {
+                "role" => "assistant",
+                "content" => "",
+                "tool_calls" => [
+                  {
+                    "id" => "call_done",
+                    "type" => "function",
+                    "function" => {
+                      "name" => "done",
+                      "arguments" => {
+                        "summary" => "Submitted review for Pilot Iroshizuku Tsuki-yo."
+                      }.to_json
+                    }
+                  }
+                ]
+              },
+              "finish_reason" => "tool_calls"
+            }
+          ],
+          "usage" => {
+            "prompt_tokens" => 200,
+            "completion_tokens" => 30,
+            "total_tokens" => 230
+          }
+        }
+      end
+
       before do
         stub_request(:post, openai_url).to_return(
-          status: 200,
-          body: submit_review_response.to_json,
-          headers: {
-            "Content-Type" => "application/json"
+          {
+            status: 200,
+            body: submit_review_response.to_json,
+            headers: {
+              "Content-Type" => "application/json"
+            }
+          },
+          {
+            status: 200,
+            body: done_after_submit_response.to_json,
+            headers: {
+              "Content-Type" => "application/json"
+            }
           }
         )
       end
@@ -297,16 +283,13 @@ RSpec.describe ReviewFinder do
       it "enqueues review submission job when AI calls submit_review" do
         subject.perform
 
-        # Find jobs that contain our specific cluster ID and page URL
         matching_jobs =
           FetchReviews::SubmitReview.jobs.select do |job|
             job["args"][0] == page.url && job["args"][1] == macro_cluster.id
           end
 
-        # Verify at least one job was enqueued for our review
         expect(matching_jobs.size).to be >= 1
 
-        # Verify the job has correct arguments
         job = matching_jobs.first
         expect(job["args"]).to eq(
           [
@@ -327,6 +310,48 @@ RSpec.describe ReviewFinder do
         subject.perform
 
         expect(subject.agent_log.reload.state).to eq("waiting-for-approval")
+      end
+
+      it "uses correct OpenAI model" do
+        subject.perform
+
+        expect(WebMock).to have_requested(:post, openai_url).with(
+          body: hash_including(model: "gpt-4.1")
+        ).at_least_once
+      end
+
+      it "includes tool definitions in the request" do
+        subject.perform
+
+        expect(WebMock).to have_requested(:post, openai_url)
+          .with { |req|
+            body = JSON.parse(req.body)
+            tools = body["tools"]
+            tool_names = tools.map { |tool| tool["function"]["name"] }
+            expect(tool_names).to include("submit_review")
+            expect(tool_names).to include("done")
+            expect(tool_names).to include("summarize")
+            expect(tool_names).to include("ink_similarity_search")
+            expect(tool_names).to include("ink_full_text_search")
+            true
+          }
+          .at_least_once
+      end
+
+      it "sends page data to OpenAI" do
+        subject.perform
+
+        expect(WebMock).to have_requested(:post, openai_url)
+          .with { |req|
+            body = JSON.parse(req.body)
+            content = body["messages"].find { |m| m["role"] == "user" }&.[]("content")
+
+            expect(content).to include("page data")
+            expect(content).to include(page.url)
+
+            true
+          }
+          .at_least_once
       end
     end
 
@@ -381,7 +406,6 @@ RSpec.describe ReviewFinder do
       it "does not enqueue any review submission jobs" do
         subject.perform
 
-        # Verify no jobs were enqueued for our specific page when calling done
         page_jobs = FetchReviews::SubmitReview.jobs.select { |job| job["args"][0] == page.url }
 
         expect(page_jobs.size).to eq(0)
@@ -451,12 +475,55 @@ RSpec.describe ReviewFinder do
         }
       end
 
+      let(:done_after_multiple_response) do
+        {
+          "id" => "chatcmpl-done-multiple",
+          "object" => "chat.completion",
+          "created" => 1_677_652_289,
+          "model" => "gpt-4.1",
+          "choices" => [
+            {
+              "index" => 0,
+              "message" => {
+                "role" => "assistant",
+                "content" => "",
+                "tool_calls" => [
+                  {
+                    "id" => "call_done",
+                    "type" => "function",
+                    "function" => {
+                      "name" => "done",
+                      "arguments" => { "summary" => "Submitted two reviews." }.to_json
+                    }
+                  }
+                ]
+              },
+              "finish_reason" => "tool_calls"
+            }
+          ],
+          "usage" => {
+            "prompt_tokens" => 250,
+            "completion_tokens" => 20,
+            "total_tokens" => 270
+          }
+        }
+      end
+
       before do
         stub_request(:post, openai_url).to_return(
-          status: 200,
-          body: multiple_reviews_response.to_json,
-          headers: {
-            "Content-Type" => "application/json"
+          {
+            status: 200,
+            body: multiple_reviews_response.to_json,
+            headers: {
+              "Content-Type" => "application/json"
+            }
+          },
+          {
+            status: 200,
+            body: done_after_multiple_response.to_json,
+            headers: {
+              "Content-Type" => "application/json"
+            }
           }
         )
       end
@@ -464,7 +531,6 @@ RSpec.describe ReviewFinder do
       it "enqueues multiple review submission jobs" do
         subject.perform
 
-        # Find jobs for our specific clusters and page
         cluster1_jobs =
           FetchReviews::SubmitReview.jobs.select do |job|
             job["args"][0] == page.url && job["args"][1] == macro_cluster.id
@@ -475,11 +541,9 @@ RSpec.describe ReviewFinder do
             job["args"][0] == page.url && job["args"][1] == cluster2.id
           end
 
-        # Verify jobs were enqueued for both clusters
         expect(cluster1_jobs.size).to be >= 1
         expect(cluster2_jobs.size).to be >= 1
 
-        # Verify job arguments contain expected explanations
         expect(cluster1_jobs.first["args"][2]).to include("Pilot Iroshizuku Tsuki-yo")
         expect(cluster2_jobs.first["args"][2]).to include("Sailor Jentle Yama-dori")
       end
@@ -487,17 +551,308 @@ RSpec.describe ReviewFinder do
 
     context "when OpenAI API returns an error" do
       before do
-        stub_request(:post, openai_url).to_return(status: 500, body: "Internal Server Error")
+        stub_request(:post, openai_url).to_return(
+          status: 500,
+          body: { error: { message: "Internal server error" } }.to_json,
+          headers: {
+            "Content-Type" => "application/json"
+          }
+        )
       end
 
       it "raises an error and does not enqueue jobs" do
         initial_job_count = FetchReviews::SubmitReview.jobs.size
 
-        expect { subject.perform }.to raise_error(Faraday::ServerError)
+        expect { subject.perform }.to raise_error(RubyLLM::ServerError)
 
-        # Job count should remain the same
         expect(FetchReviews::SubmitReview.jobs.size).to eq(initial_job_count)
       end
+    end
+
+    context "when OpenAI returns malformed JSON" do
+      before do
+        stub_request(:post, openai_url).to_return(
+          status: 200,
+          body: "invalid json",
+          headers: {
+            "Content-Type" => "application/json"
+          }
+        )
+      end
+
+      it "raises a parsing error" do
+        expect { subject.perform }.to raise_error(Faraday::ParsingError)
+      end
+    end
+  end
+
+  describe "integration scenarios" do
+    let(:openai_url) { "https://api.openai.com/v1/chat/completions" }
+
+    let(:done_response) do
+      {
+        "id" => "chatcmpl-done",
+        "object" => "chat.completion",
+        "created" => 1_677_652_288,
+        "model" => "gpt-4.1",
+        "choices" => [
+          {
+            "index" => 0,
+            "message" => {
+              "role" => "assistant",
+              "content" => "",
+              "tool_calls" => [
+                {
+                  "id" => "call_done",
+                  "type" => "function",
+                  "function" => {
+                    "name" => "done",
+                    "arguments" => { "summary" => "Done." }.to_json
+                  }
+                }
+              ]
+            },
+            "finish_reason" => "tool_calls"
+          }
+        ],
+        "usage" => {
+          "prompt_tokens" => 100,
+          "completion_tokens" => 20,
+          "total_tokens" => 120
+        }
+      }
+    end
+
+    context "with YouTube videos" do
+      let(:youtube_page) do
+        create(:web_page_for_review, url: "https://www.youtube.com/watch?v=abc123")
+      end
+
+      before do
+        allow_any_instance_of(Unfurler).to receive(:perform).and_return(youtube_unfurler_result)
+      end
+
+      it "can process YouTube video pages" do
+        finder = described_class.new(youtube_page)
+
+        expect(finder.agent_log).to be_persisted
+        expect(finder.agent_log.owner).to eq(youtube_page)
+      end
+    end
+
+    context "complete workflow" do
+      before do
+        stub_request(:post, openai_url).to_return(
+          status: 200,
+          body: done_response.to_json,
+          headers: {
+            "Content-Type" => "application/json"
+          }
+        )
+      end
+
+      it "can be initialized and performed" do
+        finder = described_class.new(page)
+
+        expect(finder.agent_log.state).to eq("processing")
+
+        finder.perform
+
+        expect(finder.agent_log.state).to eq("waiting-for-approval")
+      end
+    end
+  end
+
+  describe "error handling" do
+    context "when Unfurler raises an error" do
+      it "allows the error to propagate during perform" do
+        allow_any_instance_of(Unfurler).to receive(:perform).and_raise(
+          StandardError,
+          "Network error"
+        )
+
+        stub_request(:post, "https://api.openai.com/v1/chat/completions").to_return(
+          status: 200,
+          body: "{}",
+          headers: {
+            "Content-Type" => "application/json"
+          }
+        )
+
+        expect { subject.perform }.to raise_error(StandardError, "Network error")
+      end
+    end
+  end
+
+  describe "transcript and usage tracking" do
+    let(:openai_url) { "https://api.openai.com/v1/chat/completions" }
+
+    let(:done_response) do
+      {
+        "id" => "chatcmpl-123",
+        "object" => "chat.completion",
+        "created" => 1_677_652_288,
+        "model" => "gpt-4.1",
+        "choices" => [
+          {
+            "index" => 0,
+            "message" => {
+              "role" => "assistant",
+              "content" => "",
+              "tool_calls" => [
+                {
+                  "id" => "call_done",
+                  "type" => "function",
+                  "function" => {
+                    "name" => "done",
+                    "arguments" => { "summary" => "Done." }.to_json
+                  }
+                }
+              ]
+            },
+            "finish_reason" => "tool_calls"
+          }
+        ],
+        "usage" => {
+          "prompt_tokens" => 300,
+          "completion_tokens" => 50,
+          "total_tokens" => 350
+        }
+      }
+    end
+
+    before do
+      stub_request(:post, openai_url).to_return(
+        status: 200,
+        body: done_response.to_json,
+        headers: {
+          "Content-Type" => "application/json"
+        }
+      )
+    end
+
+    it "updates agent log transcript" do
+      subject.perform
+
+      transcript = subject.agent_log.transcript
+      expect(transcript).to be_an(Array)
+      expect(transcript.length).to be >= 3
+      expect(transcript.any? { |e| e["role"] == "user" }).to be true
+      expect(transcript.any? { |e| e["role"] == "assistant" }).to be true
+    end
+
+    it "updates agent log usage" do
+      subject.perform
+
+      usage = subject.agent_log.usage
+      expect(usage["prompt_tokens"]).to eq(300)
+      expect(usage["completion_tokens"]).to eq(50)
+      expect(usage["total_tokens"]).to eq(350)
+      expect(usage["model"]).to eq("gpt-4.1")
+    end
+  end
+
+  describe "transcript restoration" do
+    let(:openai_url) { "https://api.openai.com/v1/chat/completions" }
+
+    let(:existing_transcript) do
+      [
+        { "role" => "developer", "content" => "Your task is to check..." },
+        { "role" => "user", "content" => "The year is 2026." },
+        {
+          "role" => "assistant",
+          "content" => "",
+          "tool_calls" => [{ "id" => "call_prev", "name" => "summarize", "arguments" => {} }]
+        },
+        {
+          "role" => "tool",
+          "content" => "Here is a summary of the page:\n\nThis is about ink.",
+          "tool_call_id" => "call_prev"
+        }
+      ]
+    end
+
+    let(:done_response) do
+      {
+        "id" => "chatcmpl-continued",
+        "object" => "chat.completion",
+        "created" => 1_677_652_288,
+        "model" => "gpt-4.1",
+        "choices" => [
+          {
+            "index" => 0,
+            "message" => {
+              "role" => "assistant",
+              "content" => "",
+              "tool_calls" => [
+                {
+                  "id" => "call_done",
+                  "type" => "function",
+                  "function" => {
+                    "name" => "done",
+                    "arguments" => { "summary" => "Resuming and finishing." }.to_json
+                  }
+                }
+              ]
+            },
+            "finish_reason" => "tool_calls"
+          }
+        ],
+        "usage" => {
+          "prompt_tokens" => 100,
+          "completion_tokens" => 50,
+          "total_tokens" => 150
+        }
+      }
+    end
+
+    before do
+      stub_request(:post, openai_url).to_return(
+        status: 200,
+        body: done_response.to_json,
+        headers: {
+          "Content-Type" => "application/json"
+        }
+      )
+    end
+
+    it "restores messages including tool calls from an existing transcript" do
+      agent_log =
+        page.agent_logs.create!(
+          name: "ReviewFinder",
+          state: "processing",
+          transcript: existing_transcript
+        )
+
+      finder = described_class.new(page)
+      finder.instance_variable_set(:@agent_log, agent_log)
+
+      finder.perform
+
+      expect(WebMock).to have_requested(:post, openai_url).with { |req|
+        body = JSON.parse(req.body)
+        messages = body["messages"]
+
+        user_restored = messages.find { |m| m["role"] == "user" && m["content"]&.include?("2026") }
+        assistant_restored = messages.find { |m| m["role"] == "assistant" && m["tool_calls"]&.any? }
+        tool_restored =
+          messages.find { |m| m["role"] == "tool" && m["tool_call_id"] == "call_prev" }
+
+        user_restored && assistant_restored && tool_restored &&
+          assistant_restored["tool_calls"].first["id"] == "call_prev"
+      }
+    end
+  end
+
+  describe "class constants" do
+    it "has correct SYSTEM_DIRECTIVE content" do
+      directive = described_class::SYSTEM_DIRECTIVE
+
+      expect(directive).to be_a(String)
+      expect(directive.length).to be > 100
+      expect(directive).to include("fountain pen inks")
+      expect(directive).to include("similarity")
+      expect(directive).to include("search")
     end
   end
 end

@@ -1,9 +1,74 @@
 class ReviewFinder
-  include Raix::ChatCompletion
-  include Raix::FunctionDispatch
-  include AgentTranscript
-  include InkSimilaritySearch
-  include ConfigureToken
+  include RubyLlmAgent
+
+  class SubmitReview < RubyLLM::Tool
+    description "Submit a review for the ink clusters"
+
+    def name = "submit_review"
+
+    param :ink_cluster_id,
+          type: "integer",
+          desc:
+            "The ID of the ink cluster to submit the review for. Found via the similarity search"
+    param :explanation, desc: "An explanation of why this ink cluster was chosen for the review"
+
+    attr_accessor :page
+
+    def initialize(page)
+      self.page = page
+    end
+
+    def execute(ink_cluster_id:, explanation:)
+      cluster = MacroCluster.find_by(id: ink_cluster_id)
+      if cluster.nil?
+        "I couldn't find the ink cluster with ID #{ink_cluster_id}. Please try again."
+      else
+        FetchReviews::SubmitReview.perform_async(page.url, cluster.id, explanation)
+        "I have submitted the review for the ink cluster with ID #{ink_cluster_id} (#{cluster.name})."
+      end
+    end
+  end
+
+  class Done < RubyLLM::Tool
+    description "Call this if you are done submitting all reviews"
+
+    def name = "done"
+
+    param :summary, desc: "A summary of the actions you have taken"
+
+    attr_accessor :agent_log
+
+    def initialize(agent_log)
+      self.agent_log = agent_log
+    end
+
+    def execute(summary:)
+      agent_log.update!(extra_data: (agent_log.extra_data || {}).merge(summary: summary))
+      halt "done"
+    end
+  end
+
+  class Summarize < RubyLLM::Tool
+    description "Return a summary of the web page"
+
+    def name = "summarize"
+
+    attr_accessor :page_data, :agent_log
+
+    def initialize(page_data, agent_log)
+      self.page_data = page_data
+      self.agent_log = agent_log
+    end
+
+    def execute
+      if page_data.you_tube_channel_id.present?
+        "This is a Youtube video. I can't summarize it."
+      else
+        summary = WebPageSummarizer.new(agent_log, page_data.raw_html).perform
+        "Here is a summary of the page:\n\n#{summary}"
+      end
+    end
+  end
 
   SYSTEM_DIRECTIVE = <<~TEXT
     You will be given details about a web page or Youtube video below. The page
@@ -33,17 +98,10 @@ class ReviewFinder
 
   def initialize(page)
     self.page = page
-    if agent_log.transcript.present?
-      transcript.set!(agent_log.transcript)
-    else
-      transcript << { system: SYSTEM_DIRECTIVE }
-      transcript << { user: "The year is #{Time.current.year}." }
-      transcript << { user: page_prompt }
-    end
   end
 
   def perform
-    chat_completion(openai: "gpt-4.1")
+    ask(user_prompt)
     agent_log.waiting_for_approval!
   end
 
@@ -56,43 +114,21 @@ class ReviewFinder
 
   attr_accessor :page
 
-  function :submit_review,
-           "Submit a review for the ink clusters",
-           ink_cluster_id: {
-             type: "integer",
-             description:
-               "The ID of the ink cluster to submit the review for. Found via the similarity search"
-           },
-           explanation: {
-             type: "string",
-             description: "An explanation of why this ink cluster was chosen for the review"
-           } do |arguments|
-    cluster = MacroCluster.find_by(id: arguments["ink_cluster_id"])
-    if cluster.nil?
-      "I couldn't find the ink cluster with ID #{arguments["ink_cluster_id"]}. Please try again."
-    else
-      FetchReviews::SubmitReview.perform_async(page.url, cluster.id, arguments["explanation"])
-      "I have submitted the review for the ink cluster with ID #{arguments["ink_cluster_id"]} (#{cluster.name})."
-    end
+  def model_id = "gpt-4.1"
+  def system_directive = SYSTEM_DIRECTIVE
+
+  def tools
+    [
+      SubmitReview.new(page),
+      Done.new(agent_log),
+      Summarize.new(page_data, agent_log),
+      Tools::InkSimilaritySearchTool.new,
+      Tools::InkFullTextSearchTool.new
+    ]
   end
 
-  function :done,
-           "Call this if you are done submitting all reviews",
-           summary: {
-             type: "string",
-             description: "A summary of the actions you have taken"
-           } do |arguments|
-    agent_log.update!(extra_data: { summary: arguments["summary"] })
-    stop_tool_calls_and_respond!
-  end
-
-  function :summarize, "Return a summary of the web page" do
-    if page_data.you_tube_channel_id.present?
-      "This is a Youtube video. I can't summarize it."
-    else
-      summary = WebPageSummarizer.new(agent_log, page_data.raw_html).perform
-      "Here is a summary of the page:\n\n#{summary}"
-    end
+  def user_prompt
+    "The year is #{Time.current.year}.\n\n#{page_prompt}"
   end
 
   def page_prompt
