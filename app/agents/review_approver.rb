@@ -1,8 +1,82 @@
 class ReviewApprover
-  include Raix::ChatCompletion
-  include Raix::FunctionDispatch
-  include AgentTranscript
-  include ConfigureToken
+  include RubyLlmAgent
+
+  class ApproveReview < RubyLLM::Tool
+    description "Approve the review"
+
+    def name = "approve_review"
+
+    param :explanation_of_decision,
+          desc: "Provide a brief explanation of why you are approving this review."
+
+    attr_accessor :ink_review
+
+    def initialize(ink_review)
+      self.ink_review = ink_review
+    end
+
+    def execute(explanation_of_decision:)
+      ink_review.update(
+        extra_data:
+          ink_review.extra_data.merge(
+            action: "approve_review",
+            explanation_of_decision: explanation_of_decision
+          )
+      )
+      ink_review.agent_approve!
+      halt "approved"
+    end
+  end
+
+  class RejectReview < RubyLLM::Tool
+    description "Reject the review"
+
+    def name = "reject_review"
+
+    param :explanation_of_decision,
+          desc: "Provide a brief explanation of why you are rejecting this review."
+
+    attr_accessor :ink_review
+
+    def initialize(ink_review)
+      self.ink_review = ink_review
+    end
+
+    def execute(explanation_of_decision:)
+      ink_review.update(
+        extra_data:
+          ink_review.extra_data.merge(
+            action: "reject_review",
+            explanation_of_decision: explanation_of_decision
+          )
+      )
+      ink_review.agent_reject!
+      halt "rejected"
+    end
+  end
+
+  class Summarize < RubyLLM::Tool
+    description "Return a summary of the web page"
+
+    def name = "summarize"
+
+    attr_accessor :ink_review, :agent_log
+
+    def initialize(ink_review, agent_log)
+      self.ink_review = ink_review
+      self.agent_log = agent_log
+    end
+
+    def execute
+      page_data = Unfurler.new(ink_review.url).perform
+      if page_data.you_tube_channel_id.present?
+        "This is a Youtube video. I can't summarize it."
+      else
+        summary = WebPageSummarizer.new(agent_log, page_data.raw_html).perform
+        "Here is a summary of the page:\n\n#{summary}"
+      end
+    end
+  end
 
   SYSTEM_DIRECTIVE = <<~TEXT
     Your task is to check if the given data is a review of the ink specified or not.
@@ -26,16 +100,10 @@ class ReviewApprover
 
   def initialize(ink_review_id)
     self.ink_review = InkReview.find(ink_review_id)
-    transcript << { system: SYSTEM_DIRECTIVE }
-    transcript << { user: "The year is #{Time.current.year}." }
-    transcript << { user: macro_cluster_data }
-    transcript << { user: review_data }
-    transcript << { user: approved_reviews_data }
-    transcript << { user: rejected_reviews_data }
   end
 
   def perform
-    chat_completion(openai: "gpt-4.1-mini")
+    ask(user_prompt)
     agent_log.update!(extra_data: ink_review.extra_data)
     agent_log.waiting_for_approval!
   end
@@ -49,6 +117,27 @@ class ReviewApprover
   attr_accessor :ink_review
 
   delegate :macro_cluster, to: :ink_review
+
+  def model_id = "gpt-4.1-mini"
+  def system_directive = SYSTEM_DIRECTIVE
+
+  def tools
+    [
+      ApproveReview.new(ink_review),
+      RejectReview.new(ink_review),
+      Summarize.new(ink_review, agent_log)
+    ]
+  end
+
+  def user_prompt
+    [
+      "The year is #{Time.current.year}.",
+      macro_cluster_data,
+      review_data,
+      approved_reviews_data,
+      rejected_reviews_data
+    ].join("\n\n")
+  end
 
   def macro_cluster_data
     data = format_cluster_data(macro_cluster)
@@ -127,47 +216,5 @@ class ReviewApprover
 
   def reviews
     InkReview.joins(:ink_review_submissions).order("RANDOM()").manually_processed
-  end
-
-  function :approve_review,
-           "Approve the review",
-           explanation_of_decision: {
-             type: "string",
-             description: "Provide a brief explanation of why you are approving this review."
-           } do |arguments|
-    ink_review.update(
-      extra_data: {
-        action: "approve_review",
-        explanation_of_decision: arguments[:explanation_of_decision]
-      }.merge(ink_review.extra_data)
-    )
-    ink_review.agent_approve!
-    stop_tool_calls_and_respond!
-  end
-
-  function :reject_review,
-           "Reject the review",
-           explanation_of_decision: {
-             type: "string",
-             description: "Provide a brief explanation of why you are rejecting this review."
-           } do |arguments|
-    ink_review.update(
-      extra_data: {
-        action: "reject_review",
-        explanation_of_decision: arguments[:explanation_of_decision]
-      }.merge(ink_review.extra_data)
-    )
-    ink_review.agent_reject!
-    stop_tool_calls_and_respond!
-  end
-
-  function :summarize, "Return a summary of the web page" do
-    page_data = Unfurler.new(ink_review.url).perform
-    if page_data.you_tube_channel_id.present?
-      "This is a Youtube video. I can't summarize it."
-    else
-      summary = WebPageSummarizer.new(agent_log, page_data.raw_html).perform
-      "Here is a summary of the page:\n\n#{summary}"
-    end
   end
 end

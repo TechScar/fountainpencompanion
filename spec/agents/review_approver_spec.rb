@@ -133,116 +133,6 @@ RSpec.describe ReviewApprover do
       approver = described_class.new(ink_review.id)
       expect(approver.agent_log.owner).to eq(ink_review)
     end
-
-    it "initializes transcript with system directive" do
-      approver = described_class.new(ink_review.id)
-      expect(approver.transcript.first[:system]).to be_present
-      expect(approver.transcript.first[:system]).to include(
-        "Your task is to check if the given data is a review"
-      )
-      expect(approver.transcript.first[:system]).to include("approve or reject the review")
-    end
-
-    it "includes macro cluster data in transcript" do
-      approver = described_class.new(ink_review.id)
-      cluster_message =
-        approver.transcript.find { |msg| msg[:user]&.include?("The data for the ink is:") }
-      expect(cluster_message).to be_present
-
-      cluster_data = JSON.parse(cluster_message[:user].gsub("The data for the ink is: ", ""))
-      expect(cluster_data["name"]).to eq("Pilot Iroshizuku Tsuki-yo")
-      expect(cluster_data["synonyms"]).to be_an(Array)
-      expect(cluster_data["number_of_reviews"]).to eq(1) # approved_review_1
-    end
-
-    it "includes review data in transcript" do
-      approver = described_class.new(ink_review.id)
-      review_message =
-        approver.transcript.find { |msg| msg[:user]&.include?("The review data is:") }
-      expect(review_message).to be_present
-
-      review_data = JSON.parse(review_message[:user].gsub("The review data is: ", ""))
-      expect(review_data["title"]).to eq("Great ink review")
-      expect(review_data["description"]).to eq(
-        "This is a detailed review of Pilot Iroshizuku Tsuki-yo"
-      )
-      expect(review_data["url"]).to eq("https://example.com/review")
-      expect(review_data["host"]).to eq("example.com")
-      expect(review_data["author"]).to eq("Review Author")
-      expect(review_data["user"]).to eq("John Doe")
-      expect(review_data["is_you_tube_video"]).to be_falsy
-    end
-
-    it "includes youtube video data when applicable" do
-      create(
-        :ink_review_submission,
-        ink_review: youtube_ink_review,
-        user: user,
-        macro_cluster: macro_cluster,
-        url: youtube_ink_review.url
-      )
-      approver = described_class.new(youtube_ink_review.id)
-
-      review_message =
-        approver.transcript.find { |msg| msg[:user]&.include?("The review data is:") }
-      review_data = JSON.parse(review_message[:user].gsub("The review data is: ", ""))
-
-      expect(review_data["is_you_tube_video"]).to be true
-      expect(review_data["is_youtube_short"]).to be false
-    end
-
-    it "includes youtube short data when applicable" do
-      create(
-        :ink_review_submission,
-        ink_review: youtube_short_review,
-        user: user,
-        macro_cluster: macro_cluster,
-        url: youtube_short_review.url
-      )
-      approver = described_class.new(youtube_short_review.id)
-
-      review_message =
-        approver.transcript.find { |msg| msg[:user]&.include?("The review data is:") }
-      review_data = JSON.parse(review_message[:user].gsub("The review data is: ", ""))
-
-      expect(review_data["is_you_tube_video"]).to be true
-      expect(review_data["is_youtube_short"]).to be true
-    end
-
-    it "marks system users appropriately" do
-      admin_submission =
-        create(
-          :ink_review_submission,
-          ink_review: ink_review,
-          user: admin_user,
-          macro_cluster: macro_cluster,
-          url: ink_review.url
-        )
-      ink_review.ink_review_submissions = [admin_submission]
-
-      approver = described_class.new(ink_review.id)
-      review_message =
-        approver.transcript.find { |msg| msg[:user]&.include?("The review data is:") }
-      review_data = JSON.parse(review_message[:user].gsub("The review data is: ", ""))
-
-      expect(review_data["user"]).to eq("System")
-    end
-
-    it "includes approved and rejected reviews examples" do
-      approver = described_class.new(ink_review.id)
-
-      approved_message =
-        approver.transcript.find do |msg|
-          msg[:user]&.include?("Here are some examples of approved reviews:")
-        end
-      rejected_message =
-        approver.transcript.find do |msg|
-          msg[:user]&.include?("Here are some examples of rejected reviews:")
-        end
-
-      expect(approved_message).to be_present
-      expect(rejected_message).to be_present
-    end
   end
 
   describe "#agent_log" do
@@ -254,6 +144,359 @@ RSpec.describe ReviewApprover do
       expect(log1.name).to eq("ReviewApprover")
       expect(log1.owner).to eq(ink_review)
       expect(log1).to eq(log2)
+    end
+  end
+
+  describe "tools" do
+    let(:tool_agent_log) { AgentLog.create!(name: "test", transcript: [], owner: ink_review) }
+
+    describe ReviewApprover::ApproveReview do
+      it "has the correct description" do
+        tool = described_class.new(ink_review)
+        expect(tool.description).to eq("Approve the review")
+      end
+
+      it "has the correct name" do
+        tool = described_class.new(ink_review)
+        expect(tool.name).to eq("approve_review")
+      end
+
+      it "approves the review and halts" do
+        tool = described_class.new(ink_review)
+        result = tool.call(explanation_of_decision: "Clearly about the ink")
+
+        expect(result).to be_a(RubyLLM::Tool::Halt)
+        ink_review.reload
+        expect(ink_review.extra_data["action"]).to eq("approve_review")
+        expect(ink_review.extra_data["explanation_of_decision"]).to eq("Clearly about the ink")
+        expect(ink_review.approved_at).to be_present
+      end
+
+      it "merges with existing extra_data" do
+        ink_review.update!(extra_data: { "existing_field" => "value" })
+        tool = described_class.new(ink_review)
+        tool.call(explanation_of_decision: "Test")
+
+        ink_review.reload
+        expect(ink_review.extra_data["existing_field"]).to eq("value")
+        expect(ink_review.extra_data["action"]).to eq("approve_review")
+      end
+
+      it "overwrites stale action in extra_data" do
+        ink_review.update!(extra_data: { "action" => "reject_review" })
+        tool = described_class.new(ink_review)
+        tool.call(explanation_of_decision: "Changed my mind")
+
+        ink_review.reload
+        expect(ink_review.extra_data["action"]).to eq("approve_review")
+      end
+    end
+
+    describe ReviewApprover::RejectReview do
+      it "has the correct description" do
+        tool = described_class.new(ink_review)
+        expect(tool.description).to eq("Reject the review")
+      end
+
+      it "has the correct name" do
+        tool = described_class.new(ink_review)
+        expect(tool.name).to eq("reject_review")
+      end
+
+      it "rejects the review and halts" do
+        tool = described_class.new(ink_review)
+        result = tool.call(explanation_of_decision: "Not about the ink")
+
+        expect(result).to be_a(RubyLLM::Tool::Halt)
+        ink_review.reload
+        expect(ink_review.extra_data["action"]).to eq("reject_review")
+        expect(ink_review.extra_data["explanation_of_decision"]).to eq("Not about the ink")
+        expect(ink_review.rejected_at).to be_present
+      end
+
+      it "merges with existing extra_data" do
+        ink_review.update!(extra_data: { "existing_field" => "value" })
+        tool = described_class.new(ink_review)
+        tool.call(explanation_of_decision: "Test")
+
+        ink_review.reload
+        expect(ink_review.extra_data["existing_field"]).to eq("value")
+        expect(ink_review.extra_data["action"]).to eq("reject_review")
+      end
+    end
+
+    describe ReviewApprover::Summarize do
+      let(:unfurler_result) do
+        Unfurler::Result.new(
+          "https://example.com/review",
+          "Page Title",
+          "Page Description",
+          "https://example.com/image.jpg",
+          "Page Author",
+          nil,
+          false,
+          "<html><body>Raw HTML content</body></html>"
+        )
+      end
+
+      let(:youtube_unfurler_result) do
+        Unfurler::Result.new(
+          "https://www.youtube.com/watch?v=abc123",
+          "YouTube Video Title",
+          "YouTube Video Description",
+          "https://img.youtube.com/vi/abc123/hqdefault.jpg",
+          "Channel Name",
+          "UC123456789",
+          false,
+          nil
+        )
+      end
+
+      it "has the correct description" do
+        tool = described_class.new(ink_review, tool_agent_log)
+        expect(tool.description).to eq("Return a summary of the web page")
+      end
+
+      it "has the correct name" do
+        tool = described_class.new(ink_review, tool_agent_log)
+        expect(tool.name).to eq("summarize")
+      end
+
+      it "summarizes non-YouTube pages via WebPageSummarizer" do
+        allow(Unfurler).to receive(:new).with(ink_review.url).and_return(
+          double(perform: unfurler_result)
+        )
+        allow(WebPageSummarizer).to receive(:new).with(
+          tool_agent_log,
+          unfurler_result.raw_html
+        ).and_return(double(perform: "This page is about fountain pen ink reviews."))
+
+        tool = described_class.new(ink_review, tool_agent_log)
+        result = tool.call({})
+
+        expect(result).to eq(
+          "Here is a summary of the page:\n\nThis page is about fountain pen ink reviews."
+        )
+      end
+
+      it "returns message for YouTube videos without calling WebPageSummarizer" do
+        allow(Unfurler).to receive(:new).with(ink_review.url).and_return(
+          double(perform: youtube_unfurler_result)
+        )
+        allow(WebPageSummarizer).to receive(:new)
+
+        tool = described_class.new(ink_review, tool_agent_log)
+        result = tool.call({})
+
+        expect(result).to eq("This is a Youtube video. I can't summarize it.")
+        expect(WebPageSummarizer).not_to have_received(:new)
+      end
+    end
+  end
+
+  describe "#perform" do
+    let(:approve_response) do
+      {
+        "id" => "chatcmpl-123",
+        "object" => "chat.completion",
+        "created" => 1_677_652_288,
+        "model" => "gpt-4.1-mini",
+        "choices" => [
+          {
+            "index" => 0,
+            "message" => {
+              "role" => "assistant",
+              "content" => "",
+              "tool_calls" => [
+                {
+                  "id" => "call_123",
+                  "type" => "function",
+                  "function" => {
+                    "name" => "approve_review",
+                    "arguments" => {
+                      "explanation_of_decision" =>
+                        "This review is clearly about Pilot Iroshizuku Tsuki-yo"
+                    }.to_json
+                  }
+                }
+              ]
+            },
+            "finish_reason" => "tool_calls"
+          }
+        ],
+        "usage" => {
+          "prompt_tokens" => 300,
+          "completion_tokens" => 50,
+          "total_tokens" => 350
+        }
+      }
+    end
+
+    let(:reject_response) do
+      {
+        "id" => "chatcmpl-456",
+        "object" => "chat.completion",
+        "created" => 1_677_652_288,
+        "model" => "gpt-4.1-mini",
+        "choices" => [
+          {
+            "index" => 0,
+            "message" => {
+              "role" => "assistant",
+              "content" => "",
+              "tool_calls" => [
+                {
+                  "id" => "call_456",
+                  "type" => "function",
+                  "function" => {
+                    "name" => "reject_review",
+                    "arguments" => {
+                      "explanation_of_decision" => "This review is not related to the ink"
+                    }.to_json
+                  }
+                }
+              ]
+            },
+            "finish_reason" => "tool_calls"
+          }
+        ],
+        "usage" => {
+          "prompt_tokens" => 300,
+          "completion_tokens" => 50,
+          "total_tokens" => 350
+        }
+      }
+    end
+
+    context "when AI approves the review" do
+      before do
+        stub_request(:post, "https://api.openai.com/v1/chat/completions").to_return(
+          status: 200,
+          body: approve_response.to_json,
+          headers: {
+            "Content-Type" => "application/json"
+          }
+        )
+      end
+
+      it "approves the review and updates agent log" do
+        expect { subject.perform }.to change { AgentLog.count }.by(1)
+
+        agent_log = AgentLog.last
+        expect(agent_log.name).to eq("ReviewApprover")
+        expect(agent_log.state).to eq("waiting-for-approval")
+        expect(agent_log.owner).to eq(ink_review)
+        expect(agent_log.extra_data["action"]).to eq("approve_review")
+      end
+
+      it "approves the ink review" do
+        subject.perform
+        ink_review.reload
+        expect(ink_review.approved_at).to be_present
+      end
+
+      it "uses correct OpenAI model" do
+        subject.perform
+
+        expect(WebMock).to have_requested(:post, "https://api.openai.com/v1/chat/completions").with(
+          body: hash_including(model: "gpt-4.1-mini")
+        ).at_least_once
+      end
+
+      it "includes tool definitions in the request" do
+        subject.perform
+
+        expect(WebMock).to have_requested(
+          :post,
+          "https://api.openai.com/v1/chat/completions"
+        ).with { |req|
+          body = JSON.parse(req.body)
+          tools = body["tools"]
+          tool_names = tools.map { |tool| tool["function"]["name"] }
+          expect(tool_names).to include("approve_review")
+          expect(tool_names).to include("reject_review")
+          expect(tool_names).to include("summarize")
+          true
+        }
+      end
+
+      it "sends cluster and review data to OpenAI" do
+        subject.perform
+
+        expect(WebMock).to have_requested(:post, "https://api.openai.com/v1/chat/completions")
+          .with { |req|
+            body = JSON.parse(req.body)
+            content = body["messages"].find { |m| m["role"] == "user" }&.[]("content")
+
+            expect(content).to include("The data for the ink is:")
+            expect(content).to include("Pilot Iroshizuku Tsuki-yo")
+            expect(content).to include("The review data is:")
+            expect(content).to include("Great ink review")
+            expect(content).to include("Here are some examples of approved reviews:")
+            expect(content).to include("Here are some examples of rejected reviews:")
+
+            true
+          }
+          .at_least_once
+      end
+    end
+
+    context "when AI rejects the review" do
+      before do
+        stub_request(:post, "https://api.openai.com/v1/chat/completions").to_return(
+          status: 200,
+          body: reject_response.to_json,
+          headers: {
+            "Content-Type" => "application/json"
+          }
+        )
+      end
+
+      it "rejects the review and updates agent log" do
+        subject.perform
+
+        agent_log = subject.agent_log
+        expect(agent_log.state).to eq("waiting-for-approval")
+        expect(agent_log.extra_data["action"]).to eq("reject_review")
+      end
+
+      it "rejects the ink review" do
+        subject.perform
+        ink_review.reload
+        expect(ink_review.rejected_at).to be_present
+      end
+    end
+
+    context "when OpenAI API returns error" do
+      before do
+        stub_request(:post, "https://api.openai.com/v1/chat/completions").to_return(
+          status: 500,
+          body: { error: { message: "Internal server error" } }.to_json,
+          headers: {
+            "Content-Type" => "application/json"
+          }
+        )
+      end
+
+      it "raises an error" do
+        expect { subject.perform }.to raise_error(RubyLLM::ServerError)
+      end
+    end
+
+    context "when OpenAI returns malformed JSON" do
+      before do
+        stub_request(:post, "https://api.openai.com/v1/chat/completions").to_return(
+          status: 200,
+          body: "invalid json",
+          headers: {
+            "Content-Type" => "application/json"
+          }
+        )
+      end
+
+      it "raises a parsing error" do
+        expect { subject.perform }.to raise_error(Faraday::ParsingError)
+      end
     end
   end
 
@@ -322,6 +565,24 @@ RSpec.describe ReviewApprover do
         expect(data["is_youtube_short"]).to be true
       end
 
+      it "marks admin users as System" do
+        admin_submission =
+          create(
+            :ink_review_submission,
+            ink_review: ink_review,
+            user: admin_user,
+            macro_cluster: macro_cluster,
+            url: ink_review.url
+          )
+        ink_review.ink_review_submissions = [admin_submission]
+
+        approver = described_class.new(ink_review.id)
+        message = approver.send(:review_data)
+
+        data = JSON.parse(message.gsub("The review data is: ", ""))
+        expect(data["user"]).to eq("System")
+      end
+
       it "handles users without names" do
         user_without_name = create(:user, name: nil, email: "noname@example.com")
         create(
@@ -351,7 +612,6 @@ RSpec.describe ReviewApprover do
         expect(approved_message).to include("Here are some examples of approved reviews:")
         expect(rejected_message).to include("Here are some examples of rejected reviews:")
 
-        # Verify the data includes our test reviews
         approved_data =
           JSON.parse(approved_message.gsub("Here are some examples of approved reviews: ", ""))
         rejected_data =
@@ -361,255 +621,7 @@ RSpec.describe ReviewApprover do
         expect(rejected_data).to be_an(Array)
       end
     end
-  end
 
-  describe "function definitions" do
-    it "has approve_review function defined" do
-      expect(subject.class.instance_methods).to include(:approve_review)
-    end
-
-    it "has reject_review function defined" do
-      expect(subject.class.instance_methods).to include(:reject_review)
-    end
-
-    it "has summarize function defined" do
-      expect(subject.class.instance_methods).to include(:summarize)
-    end
-  end
-
-  describe "#summarize" do
-    let(:unfurler_result) do
-      Unfurler::Result.new(
-        "https://example.com/review",
-        "Page Title",
-        "Page Description",
-        "https://example.com/image.jpg",
-        "Page Author",
-        nil,
-        false,
-        "<html><body>Raw HTML content</body></html>"
-      )
-    end
-
-    let(:summarizer_response) { "This page is about fountain pen ink reviews." }
-
-    before do
-      allow(Unfurler).to receive(:new).with(ink_review.url).and_return(
-        double(perform: unfurler_result)
-      )
-    end
-
-    context "when URL is not a YouTube video" do
-      before do
-        allow(WebPageSummarizer).to receive(:new).with(
-          subject.agent_log,
-          unfurler_result.raw_html
-        ).and_return(double(perform: summarizer_response))
-      end
-
-      it "calls Unfurler and WebPageSummarizer" do
-        # Test the summarize logic by simulating what happens inside the function
-        unfurler_instance = double(perform: unfurler_result)
-        summarizer_instance = double(perform: summarizer_response)
-
-        allow(Unfurler).to receive(:new).with(ink_review.url).and_return(unfurler_instance)
-        allow(WebPageSummarizer).to receive(:new).with(
-          subject.agent_log,
-          unfurler_result.raw_html
-        ).and_return(summarizer_instance)
-
-        # Since the function is called via function dispatch, test the internal logic
-        page_data = Unfurler.new(ink_review.url).perform
-
-        expect(page_data.you_tube_channel_id).to be_nil
-        summary = WebPageSummarizer.new(subject.agent_log, page_data.raw_html).perform
-        result = "Here is a summary of the page:\n\n#{summary}"
-
-        expect(result).to eq("Here is a summary of the page:\n\n#{summarizer_response}")
-        expect(Unfurler).to have_received(:new).with(ink_review.url)
-        expect(WebPageSummarizer).to have_received(:new).with(
-          subject.agent_log,
-          unfurler_result.raw_html
-        )
-      end
-    end
-
-    context "when URL is a YouTube video" do
-      let(:youtube_unfurler_result) do
-        Unfurler::Result.new(
-          "https://www.youtube.com/watch?v=abc123",
-          "YouTube Video Title",
-          "YouTube Video Description",
-          "https://img.youtube.com/vi/abc123/hqdefault.jpg",
-          "Channel Name",
-          "UC123456789",
-          false,
-          nil
-        )
-      end
-
-      before do
-        allow(Unfurler).to receive(:new).with(youtube_ink_review.url).and_return(
-          double(perform: youtube_unfurler_result)
-        )
-        allow(WebPageSummarizer).to receive(:new)
-      end
-
-      it "returns message that it can't summarize YouTube videos" do
-        create(
-          :ink_review_submission,
-          ink_review: youtube_ink_review,
-          user: user,
-          macro_cluster: macro_cluster,
-          url: youtube_ink_review.url
-        )
-        approver = described_class.new(youtube_ink_review.id)
-
-        # Test the summarize logic by simulating what happens inside the function
-        unfurler_instance = double(perform: youtube_unfurler_result)
-        allow(Unfurler).to receive(:new).with(youtube_ink_review.url).and_return(unfurler_instance)
-
-        # Since the function is called via function dispatch, test the internal logic
-        page_data = Unfurler.new(youtube_ink_review.url).perform
-
-        if page_data.you_tube_channel_id.present?
-          result = "This is a Youtube video. I can't summarize it."
-        else
-          result = "This should not happen in this test"
-        end
-
-        expect(result).to eq("This is a Youtube video. I can't summarize it.")
-        expect(WebPageSummarizer).not_to have_received(:new)
-      end
-    end
-  end
-
-  describe "business logic" do
-    it "correctly identifies review user" do
-      expect(ink_review.user).to eq(user)
-    end
-
-    it "correctly identifies macro cluster" do
-      expect(subject.send(:macro_cluster)).to eq(macro_cluster)
-    end
-
-    it "correctly formats cluster name" do
-      expect(macro_cluster.name).to eq("Pilot Iroshizuku Tsuki-yo")
-    end
-
-    it "handles extra_data merging properly" do
-      ink_review.update!(extra_data: { "existing_field" => "value" })
-
-      # Test the logic inside the function - Rails stores JSON with string keys
-      new_data = {
-        "action" => "approve_review",
-        "explanation_of_decision" => "Test explanation"
-      }.merge(ink_review.extra_data || {})
-
-      expect(new_data["existing_field"]).to eq("value")
-      expect(new_data["action"]).to eq("approve_review")
-      expect(new_data["explanation_of_decision"]).to eq("Test explanation")
-    end
-  end
-
-  describe "error handling" do
-    context "when ink_review is not found" do
-      it "raises an error" do
-        expect { described_class.new(99_999) }.to raise_error(ActiveRecord::RecordNotFound)
-      end
-    end
-  end
-
-  describe "edge cases" do
-    context "when macro cluster has no synonyms" do
-      let(:empty_macro_cluster) do
-        create(:macro_cluster, brand_name: "Test", line_name: "", ink_name: "Ink")
-      end
-
-      let(:empty_ink_review) { create(:ink_review, macro_cluster: empty_macro_cluster) }
-
-      it "handles empty synonyms gracefully" do
-        create(
-          :ink_review_submission,
-          ink_review: empty_ink_review,
-          user: user,
-          macro_cluster: empty_macro_cluster,
-          url: empty_ink_review.url
-        )
-        approver = described_class.new(empty_ink_review.id)
-
-        cluster_message =
-          approver.transcript.find { |msg| msg[:user]&.include?("The data for the ink is:") }
-        cluster_data = JSON.parse(cluster_message[:user].gsub("The data for the ink is: ", ""))
-
-        expect(cluster_data["synonyms"]).to eq([])
-      end
-    end
-
-    context "when review has no author" do
-      let(:review_without_author) do
-        create(
-          :ink_review,
-          title: "Review without author",
-          author: nil,
-          macro_cluster: macro_cluster
-        )
-      end
-
-      it "handles nil author gracefully" do
-        create(
-          :ink_review_submission,
-          ink_review: review_without_author,
-          user: user,
-          macro_cluster: macro_cluster,
-          url: review_without_author.url
-        )
-        approver = described_class.new(review_without_author.id)
-
-        review_message =
-          approver.transcript.find { |msg| msg[:user]&.include?("The review data is:") }
-        review_data = JSON.parse(review_message[:user].gsub("The review data is: ", ""))
-
-        expect(review_data["author"]).to be_nil
-      end
-    end
-
-    context "when ink review has no extra_data" do
-      it "handles nil extra_data in merging" do
-        ink_review.update!(extra_data: nil)
-
-        new_data = {
-          "action" => "approve_review",
-          "explanation_of_decision" => "Test explanation"
-        }.merge(ink_review.extra_data || {})
-
-        expect(new_data["action"]).to eq("approve_review")
-        expect(new_data["explanation_of_decision"]).to eq("Test explanation")
-      end
-    end
-
-    context "when there are no approved or rejected reviews" do
-      it "returns empty arrays for examples" do
-        # Clear existing reviews
-        InkReview.where.not(id: ink_review.id).destroy_all
-
-        approver = described_class.new(ink_review.id)
-
-        approved_message = approver.send(:approved_reviews_data)
-        rejected_message = approver.send(:rejected_reviews_data)
-
-        approved_data =
-          JSON.parse(approved_message.gsub("Here are some examples of approved reviews: ", ""))
-        rejected_data =
-          JSON.parse(rejected_message.gsub("Here are some examples of rejected reviews: ", ""))
-
-        expect(approved_data).to be_an(Array)
-        expect(rejected_data).to be_an(Array)
-      end
-    end
-  end
-
-  describe "private methods" do
     describe "#format_cluster_data" do
       it "correctly formats cluster data" do
         cluster_data = subject.send(:format_cluster_data, macro_cluster)
@@ -682,6 +694,100 @@ RSpec.describe ReviewApprover do
     end
   end
 
+  describe "business logic" do
+    it "correctly identifies review user" do
+      expect(ink_review.user).to eq(user)
+    end
+
+    it "correctly identifies macro cluster" do
+      expect(subject.send(:macro_cluster)).to eq(macro_cluster)
+    end
+
+    it "correctly formats cluster name" do
+      expect(macro_cluster.name).to eq("Pilot Iroshizuku Tsuki-yo")
+    end
+  end
+
+  describe "error handling" do
+    context "when ink_review is not found" do
+      it "raises an error" do
+        expect { described_class.new(99_999) }.to raise_error(ActiveRecord::RecordNotFound)
+      end
+    end
+  end
+
+  describe "edge cases" do
+    context "when macro cluster has no synonyms" do
+      let(:empty_macro_cluster) do
+        create(:macro_cluster, brand_name: "Test", line_name: "", ink_name: "Ink")
+      end
+
+      let(:empty_ink_review) { create(:ink_review, macro_cluster: empty_macro_cluster) }
+
+      it "handles empty synonyms gracefully" do
+        create(
+          :ink_review_submission,
+          ink_review: empty_ink_review,
+          user: user,
+          macro_cluster: empty_macro_cluster,
+          url: empty_ink_review.url
+        )
+        approver = described_class.new(empty_ink_review.id)
+
+        message = approver.send(:macro_cluster_data)
+        cluster_data = JSON.parse(message.gsub("The data for the ink is: ", ""))
+
+        expect(cluster_data["synonyms"]).to eq([])
+      end
+    end
+
+    context "when review has no author" do
+      let(:review_without_author) do
+        create(
+          :ink_review,
+          title: "Review without author",
+          author: nil,
+          macro_cluster: macro_cluster
+        )
+      end
+
+      it "handles nil author gracefully" do
+        create(
+          :ink_review_submission,
+          ink_review: review_without_author,
+          user: user,
+          macro_cluster: macro_cluster,
+          url: review_without_author.url
+        )
+        approver = described_class.new(review_without_author.id)
+
+        message = approver.send(:review_data)
+        review_data = JSON.parse(message.gsub("The review data is: ", ""))
+
+        expect(review_data["author"]).to be_nil
+      end
+    end
+
+    context "when there are no approved or rejected reviews" do
+      it "returns empty arrays for examples" do
+        InkReview.where.not(id: ink_review.id).destroy_all
+
+        approver = described_class.new(ink_review.id)
+
+        approved_message = approver.send(:approved_reviews_data)
+        rejected_message = approver.send(:rejected_reviews_data)
+
+        approved_data =
+          JSON.parse(approved_message.gsub("Here are some examples of approved reviews: ", ""))
+        rejected_data =
+          JSON.parse(rejected_message.gsub("Here are some examples of rejected reviews: ", ""))
+
+        expect(approved_data).to be_an(Array)
+        expect(rejected_data).to be_an(Array)
+      end
+    end
+  end
+
   describe "class constants" do
     it "has correct SYSTEM_DIRECTIVE content" do
       directive = described_class::SYSTEM_DIRECTIVE
@@ -693,21 +799,166 @@ RSpec.describe ReviewApprover do
     end
   end
 
-  describe "integration with AgentTranscript" do
-    it "properly initializes transcript" do
-      expect(subject.transcript).to be_a(AgentTranscript::Transcript)
-      expect(subject.transcript.count).to be > 0
+  describe "transcript restoration" do
+    let(:existing_transcript) do
+      [
+        { "role" => "developer", "content" => "Your task is to check if the given data..." },
+        { "role" => "user", "content" => "The year is 2026." },
+        {
+          "role" => "assistant",
+          "content" => "",
+          "tool_calls" => [{ "id" => "call_prev", "name" => "summarize", "arguments" => {} }]
+        },
+        {
+          "role" => "tool",
+          "content" => "Here is a summary of the page:\n\nThis is about ink.",
+          "tool_call_id" => "call_prev"
+        }
+      ]
     end
 
-    it "includes system message in transcript" do
-      system_message = subject.transcript.find { |msg| msg.key?(:system) }
-      expect(system_message).to be_present
-      expect(system_message[:system]).to include("check if the given data is a review")
+    let(:continued_response) do
+      {
+        "id" => "chatcmpl-continued",
+        "object" => "chat.completion",
+        "created" => 1_677_652_288,
+        "model" => "gpt-4.1-mini",
+        "choices" => [
+          {
+            "index" => 0,
+            "message" => {
+              "role" => "assistant",
+              "content" => "",
+              "tool_calls" => [
+                {
+                  "id" => "call_new",
+                  "type" => "function",
+                  "function" => {
+                    "name" => "approve_review",
+                    "arguments" => {
+                      "explanation_of_decision" => "The summary confirms this is about the ink"
+                    }.to_json
+                  }
+                }
+              ]
+            },
+            "finish_reason" => "tool_calls"
+          }
+        ],
+        "usage" => {
+          "prompt_tokens" => 100,
+          "completion_tokens" => 50,
+          "total_tokens" => 150
+        }
+      }
     end
 
-    it "includes user messages in transcript" do
-      user_messages = subject.transcript.select { |msg| msg.key?(:user) }
-      expect(user_messages.length).to be >= 4 # cluster, review, approved, rejected
+    before do
+      stub_request(:post, "https://api.openai.com/v1/chat/completions").to_return(
+        status: 200,
+        body: continued_response.to_json,
+        headers: {
+          "Content-Type" => "application/json"
+        }
+      )
+    end
+
+    it "restores messages including tool calls from an existing transcript" do
+      agent_log =
+        ink_review.agent_logs.create!(
+          name: "ReviewApprover",
+          state: "processing",
+          transcript: existing_transcript
+        )
+
+      approver = described_class.new(ink_review.id)
+      approver.instance_variable_set(:@agent_log, agent_log)
+
+      approver.perform
+
+      expect(WebMock).to have_requested(
+        :post,
+        "https://api.openai.com/v1/chat/completions"
+      ).with { |req|
+        body = JSON.parse(req.body)
+        messages = body["messages"]
+
+        user_restored = messages.find { |m| m["role"] == "user" && m["content"]&.include?("2026") }
+        assistant_restored = messages.find { |m| m["role"] == "assistant" && m["tool_calls"]&.any? }
+        tool_restored =
+          messages.find { |m| m["role"] == "tool" && m["tool_call_id"] == "call_prev" }
+
+        user_restored && assistant_restored && tool_restored &&
+          assistant_restored["tool_calls"].first["id"] == "call_prev"
+      }
+    end
+  end
+
+  describe "transcript and usage tracking" do
+    before do
+      stub_request(:post, "https://api.openai.com/v1/chat/completions").to_return(
+        status: 200,
+        body: approve_response.to_json,
+        headers: {
+          "Content-Type" => "application/json"
+        }
+      )
+    end
+
+    let(:approve_response) do
+      {
+        "id" => "chatcmpl-123",
+        "object" => "chat.completion",
+        "created" => 1_677_652_288,
+        "model" => "gpt-4.1-mini",
+        "choices" => [
+          {
+            "index" => 0,
+            "message" => {
+              "role" => "assistant",
+              "content" => "",
+              "tool_calls" => [
+                {
+                  "id" => "call_123",
+                  "type" => "function",
+                  "function" => {
+                    "name" => "approve_review",
+                    "arguments" => {
+                      "explanation_of_decision" => "Review is about the ink"
+                    }.to_json
+                  }
+                }
+              ]
+            },
+            "finish_reason" => "tool_calls"
+          }
+        ],
+        "usage" => {
+          "prompt_tokens" => 300,
+          "completion_tokens" => 50,
+          "total_tokens" => 350
+        }
+      }
+    end
+
+    it "updates agent log transcript" do
+      subject.perform
+
+      transcript = subject.agent_log.transcript
+      expect(transcript).to be_an(Array)
+      expect(transcript.length).to be >= 3
+      expect(transcript.any? { |e| e["role"] == "user" }).to be true
+      expect(transcript.any? { |e| e["role"] == "assistant" }).to be true
+    end
+
+    it "updates agent log usage" do
+      subject.perform
+
+      usage = subject.agent_log.usage
+      expect(usage["prompt_tokens"]).to eq(300)
+      expect(usage["completion_tokens"]).to eq(50)
+      expect(usage["total_tokens"]).to eq(350)
+      expect(usage["model"]).to eq("gpt-4.1-mini")
     end
   end
 end
