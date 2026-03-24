@@ -1,10 +1,133 @@
 class InkClusterer
-  include Raix::ChatCompletion
-  include Raix::FunctionDispatch
-  include AgentTranscript
-  include InkWebSearch
-  include InkSimilaritySearch
-  include ConfigureToken
+  include RubyLlmAgent
+
+  class BaseTool < RubyLLM::Tool
+    attr_accessor :micro_cluster, :agent_log
+
+    def initialize(micro_cluster, agent_log)
+      self.micro_cluster = micro_cluster
+      self.agent_log = agent_log
+    end
+
+    private
+
+    def missing_explanation?(explanation_of_decision)
+      explanation_of_decision.blank?
+    end
+
+    def missing_explanation_error
+      "Tool call not successful. Please supply an explanation of your decision."
+    end
+
+    def update_extra_data(data)
+      agent_log.update!(extra_data: (agent_log.extra_data || {}).merge("action" => name, **data))
+    end
+
+    def micro_cluster_str
+      "MicroCluster(#{micro_cluster.id})<#{micro_cluster.all_names.sort.join(", ")}>"
+    end
+  end
+
+  class AssignToCluster < BaseTool
+    description "Assign ink to existing cluster"
+
+    def name = "assign_to_cluster"
+
+    param :cluster_id, type: "integer", desc: "The ID of the cluster to assign the ink to"
+    param :explanation_of_decision,
+          desc:
+            "Explain why you are assigning the ink to this cluster and not creating a cluster or ignoring it"
+
+    def execute(cluster_id:, explanation_of_decision:)
+      return missing_explanation_error if missing_explanation?(explanation_of_decision)
+
+      cluster = MacroCluster.find_by(id: cluster_id.to_i)
+      return "Tool call not successful. Please supply a valid cluster ID." unless cluster
+
+      update_extra_data(
+        "msg" => "Assigning #{micro_cluster_str} to #{cluster.id} - #{cluster.name}",
+        "explanation_of_decision" => explanation_of_decision,
+        "cluster_id" => cluster.id
+      )
+      halt "Assigned to cluster #{cluster.id} - #{cluster.name}"
+    end
+  end
+
+  class CreateNewCluster < BaseTool
+    description "Create a new cluster for this ink"
+
+    def name = "create_new_cluster"
+
+    param :explanation_of_decision,
+          desc:
+            "Explain why you are creating a new cluster for this ink and not assigning it to an existing one or ignoring it"
+
+    def execute(explanation_of_decision:)
+      return missing_explanation_error if missing_explanation?(explanation_of_decision)
+
+      update_extra_data(
+        "msg" => "Creating new cluster for #{micro_cluster_str}",
+        "explanation_of_decision" => explanation_of_decision
+      )
+      halt "Creating new cluster"
+    end
+  end
+
+  class IgnoreInk < BaseTool
+    description "Ignore this ink"
+
+    def name = "ignore_ink"
+
+    param :explanation_of_decision,
+          desc:
+            "Explain why you are ignoring this ink and not assigning it to a cluster or creating a new one"
+
+    def execute(explanation_of_decision:)
+      return missing_explanation_error if missing_explanation?(explanation_of_decision)
+
+      update_extra_data(
+        "msg" => "Ignoring #{micro_cluster_str}",
+        "explanation_of_decision" => explanation_of_decision
+      )
+      halt "Ignoring ink"
+    end
+  end
+
+  class HandOverToHuman < BaseTool
+    description "Hand over to human to do the assignment"
+
+    def name = "hand_over_to_human"
+
+    def execute
+      update_extra_data("msg" => "Handing over #{micro_cluster_str} to human")
+      halt "Handing over to human"
+    end
+  end
+
+  class KnownBrand < RubyLLM::Tool
+    description "Check if brand of ink is known"
+
+    def name = "known_brand"
+
+    attr_accessor :micro_cluster
+
+    def initialize(micro_cluster)
+      self.micro_cluster = micro_cluster
+    end
+
+    def execute
+      known =
+        MacroCluster
+          .joins(:micro_clusters)
+          .where(micro_clusters: { simplified_brand_name: micro_cluster.simplified_brand_name })
+          .exists?
+      if known
+        "Yes, the ink brand is known."
+      else
+        "No, the ink brand is not known. Use the search function to double check for spelling mistakes, though!"
+      end
+    end
+  end
 
   SYSTEM_DIRECTIVE = <<~TEXT
     You are a clustering algorithm that groups similar inks together based on their properties.
@@ -50,13 +173,6 @@ class InkClusterer
   def initialize(micro_cluster_id, agent_log_id: nil)
     self.micro_cluster = MicroCluster.find(micro_cluster_id)
     self.agent_log_id = agent_log_id
-    if agent_log.transcript.present?
-      transcript.set!(agent_log.transcript)
-    else
-      transcript << { system: SYSTEM_DIRECTIVE }
-      transcript << { user: micro_cluster_data }
-      transcript << { user: processed_tries_data } if processed_tries?
-    end
   end
 
   def agent_log
@@ -68,17 +184,17 @@ class InkClusterer
 
   def perform
     if micro_cluster.collected_inks.present?
-      chat_completion(openai: "gpt-4.1")
-      agent_log.update!(extra_data: extra_data)
+      ask(user_prompt)
       agent_log.waiting_for_approval!
       schedule_follow_up!
     else
       agent_log.update(
-        extra_data: {
-          "action" => "reject",
-          "explanation_of_decision" =>
-            "The micro cluster has no inks in it. It is not possible to cluster an empty micro cluster."
-        }
+        extra_data:
+          (agent_log.extra_data || {}).merge(
+            "action" => "reject",
+            "explanation_of_decision" =>
+              "The micro cluster has no inks in it. It is not possible to cluster an empty micro cluster."
+          )
       )
       agent_log.approve_by_agent!
     end
@@ -98,6 +214,7 @@ class InkClusterer
       end
 
     if follow_up_agent.present?
+      extra_data = agent_log.extra_data
       extra_data[:follow_up_agent] = follow_up_agent.name
       agent_log.update!(extra_data: extra_data)
 
@@ -138,7 +255,30 @@ class InkClusterer
 
   private
 
-  attr_accessor :extra_data, :micro_cluster, :agent_log_id
+  attr_accessor :micro_cluster, :agent_log_id
+
+  def model_id = "gpt-4.1"
+
+  def system_directive = SYSTEM_DIRECTIVE
+
+  def tools
+    [
+      AssignToCluster.new(micro_cluster, agent_log),
+      CreateNewCluster.new(micro_cluster, agent_log),
+      IgnoreInk.new(micro_cluster, agent_log),
+      HandOverToHuman.new(micro_cluster, agent_log),
+      KnownBrand.new(micro_cluster),
+      Tools::InkSimilaritySearchTool.new,
+      Tools::InkFullTextSearchTool.new,
+      Tools::InkWebSearchTool.new(agent_log)
+    ]
+  end
+
+  def user_prompt
+    prompt = micro_cluster_data
+    prompt += "\n\n#{processed_tries_data}" if processed_tries?
+    prompt
+  end
 
   def clean_up_rejected_approval!
     case agent_log.extra_data["action"]
@@ -194,93 +334,5 @@ class InkClusterer
     data[:colors] = micro_cluster.colors if micro_cluster.colors.present?
 
     "This is the data for the ink to cluster: #{data.to_json}"
-  end
-
-  function :assign_to_cluster,
-           "Assign ink to existing cluster",
-           cluster_id: {
-             type: "integer"
-           },
-           explanation_of_decision: {
-             type: "string",
-             description:
-               "Explain why you are assigning the ink to this cluster and not creating a cluster or ignoring it"
-           } do |arguments|
-    cluster_id = arguments[:cluster_id].to_i
-    cluster = MacroCluster.find_by(id: cluster_id)
-    if cluster && arguments[:explanation_of_decision].present?
-      self.extra_data = {
-        msg: "Assigning #{micro_cluster_str} to #{cluster.id} - #{cluster.name}",
-        action: "assign_to_cluster",
-        explanation_of_decision: arguments[:explanation_of_decision],
-        cluster_id: cluster.id
-      }
-      stop_tool_calls_and_respond!
-    else
-      "Tool call not successful. Please supply a valid cluster ID to assign the ink to as well as an explanation of your decision."
-    end
-  end
-
-  function :create_new_cluster,
-           "Create a new cluster for this ink",
-           explanation_of_decision: {
-             type: "string",
-             description:
-               "Explain why you are creating a new cluster for this ink and not assigning it to an existing one or ignoring it"
-           } do |arguments|
-    if arguments[:explanation_of_decision].present?
-      self.extra_data = {
-        msg: "Creating new cluster for #{micro_cluster_str}",
-        action: "create_new_cluster",
-        explanation_of_decision: arguments[:explanation_of_decision]
-      }
-      stop_tool_calls_and_respond!
-    else
-      "Tool call not successful. Please supply an explanation of your decision to create a new cluster for this ink."
-    end
-  end
-
-  function :ignore_ink,
-           "Ignore this ink",
-           explanation_of_decision: {
-             type: "string",
-             description:
-               "Explain why you are ignoring this ink and not assigning it to a cluster or creating a new one"
-           } do |arguments|
-    if arguments[:explanation_of_decision].present?
-      self.extra_data = {
-        msg: "Ignoring #{micro_cluster_str}",
-        action: "ignore_ink",
-        explanation_of_decision: arguments[:explanation_of_decision]
-      }
-      stop_tool_calls_and_respond!
-    else
-      "Tool call not successful. Please supply an explanation of your decision to ignore this ink."
-    end
-  end
-
-  function :hand_over_to_human, "Hand over to human to do the assignment" do |_arguments|
-    self.extra_data = {
-      msg: "Handing over #{micro_cluster_str} to human",
-      action: "hand_over_to_human"
-    }
-    stop_tool_calls_and_respond!
-  end
-
-  function :known_brand, "Check if brand of ink is known" do
-    known_brand =
-      MacroCluster
-        .joins(:micro_clusters)
-        .where(micro_clusters: { simplified_brand_name: micro_cluster.simplified_brand_name })
-        .exists?
-    if known_brand
-      "Yes, the ink brand is known."
-    else
-      "No, the ink brand is not known. Use the search function to double check for spelling mistakes, though!"
-    end
-  end
-
-  def micro_cluster_str
-    "MicroCluster(#{micro_cluster.id})<#{micro_cluster.all_names.sort.join(", ")}>"
   end
 end
