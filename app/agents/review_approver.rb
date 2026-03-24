@@ -2,7 +2,7 @@ class ReviewApprover
   include RubyLlmAgent
 
   class ApproveReview < RubyLLM::Tool
-    description "Approve the review"
+    description "Approve the review to make it customer visible"
 
     def name = "approve_review"
 
@@ -29,7 +29,7 @@ class ReviewApprover
   end
 
   class RejectReview < RubyLLM::Tool
-    description "Reject the review"
+    description "Reject the review to ensure it is hidden from public view"
 
     def name = "reject_review"
 

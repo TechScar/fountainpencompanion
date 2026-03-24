@@ -153,7 +153,7 @@ RSpec.describe ReviewApprover do
     describe ReviewApprover::ApproveReview do
       it "has the correct description" do
         tool = described_class.new(ink_review)
-        expect(tool.description).to eq("Approve the review")
+        expect(tool.description).to eq("Approve the review to make it customer visible")
       end
 
       it "has the correct name" do
@@ -195,7 +195,7 @@ RSpec.describe ReviewApprover do
     describe ReviewApprover::RejectReview do
       it "has the correct description" do
         tool = described_class.new(ink_review)
-        expect(tool.description).to eq("Reject the review")
+        expect(tool.description).to eq("Reject the review to ensure it is hidden from public view")
       end
 
       it "has the correct name" do
