@@ -1,19 +1,13 @@
 class Youtube
   class Client
     APPLICATION_NAME = "Fountain Pen Companion"
-
-    def self.credentials
-      @credentials ||= YAML.load(ENV["GOOGLE_CREDENTIALS"])
-    end
-
-    def self.secrets
-      @secrets ||= YAML.load(ENV["GOOGLE_CLIENT_SECRETS"])
-    end
+    CREDENTIALS = YAML.load(ENV["GOOGLE_CREDENTIALS"])
+    SECRETS = YAML.load(ENV["GOOGLE_CLIENT_SECRETS"])
     SCOPE = Google::Apis::YoutubeV3::AUTH_YOUTUBE_READONLY
 
     class Credentials
       def initialize
-        @credentials = Client.credentials
+        @credentials = CREDENTIALS
       end
 
       def load(user_id)
@@ -40,7 +34,7 @@ class Youtube
     attr_accessor :service
 
     def authorize
-      client_id = Google::Auth::ClientId.from_hash(Client.secrets)
+      client_id = Google::Auth::ClientId.from_hash(SECRETS)
       authorizer = Google::Auth::UserAuthorizer.new(client_id, SCOPE, Credentials.new)
       authorizer.get_credentials("default")
     end
