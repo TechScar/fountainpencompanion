@@ -50,43 +50,18 @@ RSpec.describe CheckInkClustering::Create do
       expect(micro_cluster_agent_log.agent_logs).to include(child_log)
     end
 
-    it "initializes transcript with system directive" do
-      agent = described_class.new(micro_cluster_agent_log.id)
-      expect(agent.transcript.first[:system]).to be_present
-      expect(agent.transcript.first[:system]).to include(
-        "reviewing the result of a clustering algorithm"
-      )
-      expect(agent.transcript.first[:system]).to include("new cluster should be created")
-    end
-
-    it "includes clustering explanation in transcript" do
-      agent = described_class.new(micro_cluster_agent_log.id)
-      explanation_message =
-        agent.transcript.find { |msg| msg[:user]&.include?("reasoning of the AI") }
-      expect(explanation_message).to be_present
-      expect(explanation_message[:user]).to include("doesn't match any existing clusters")
-    end
-
-    it "includes micro cluster data in transcript" do
-      agent = described_class.new(micro_cluster_agent_log.id)
-      cluster_data_message =
-        agent.transcript.find { |msg| msg[:user]&.include?("data for the ink to cluster") }
-      expect(cluster_data_message).to be_present
-      expect(cluster_data_message[:user]).to include("Diamine")
-      expect(cluster_data_message[:user]).to include("Oxford Blue")
-    end
-
-    context "with existing agent log transcript" do
+    context "with existing processing agent log" do
       let!(:existing_agent_log) do
         micro_cluster_agent_log.agent_logs.create!(
           name: "CheckInkClustering::Create",
-          transcript: [{ system: "existing transcript" }]
+          transcript: [{ role: "user", content: "existing transcript" }],
+          state: "processing"
         )
       end
 
-      it "reuses existing transcript" do
+      it "reuses existing processing agent log" do
         agent = described_class.new(micro_cluster_agent_log.id)
-        expect(agent.transcript.first[:system]).to eq("existing transcript")
+        expect(agent.send(:agent_log)).to eq(existing_agent_log)
       end
     end
   end
@@ -146,6 +121,18 @@ RSpec.describe CheckInkClustering::Create do
         subject.perform
 
         expect(WebMock).to have_requested(:post, openai_url).at_least_once
+      end
+
+      it "includes clustering explanation and micro cluster data in request" do
+        subject.perform
+
+        expect(WebMock).to have_requested(:post, openai_url).with { |req|
+          body = JSON.parse(req.body)
+          messages = body["messages"]
+          user_message = messages.find { |m| m["role"] == "user" }
+          user_message["content"].include?("reasoning of the AI") &&
+            user_message["content"].include?("data for the ink to cluster")
+        }
       end
 
       it "updates agent log with approval" do
@@ -269,7 +256,7 @@ RSpec.describe CheckInkClustering::Create do
 
       subject { described_class.new(empty_agent_log.id) }
 
-      it "rejects empty micro cluster without calling OpenAI" do
+      it "auto-approves empty micro cluster without calling OpenAI" do
         subject.perform
 
         expect(WebMock).not_to have_requested(:post, openai_url)
@@ -277,6 +264,7 @@ RSpec.describe CheckInkClustering::Create do
         agent_log = subject.send(:agent_log)
         expect(agent_log.extra_data["action"]).to eq("reject")
         expect(agent_log.extra_data["explanation_of_decision"]).to include("no inks in it")
+        expect(agent_log.state).to eq("approved")
       end
     end
 
@@ -286,23 +274,7 @@ RSpec.describe CheckInkClustering::Create do
       end
 
       it "raises API errors as expected" do
-        expect { subject.perform }.to raise_error(Faraday::ServerError)
-      end
-    end
-
-    context "with malformed OpenAI response" do
-      before do
-        stub_request(:post, openai_url).to_return(
-          status: 200,
-          body: { "invalid" => "response" }.to_json,
-          headers: {
-            "Content-Type" => "application/json"
-          }
-        )
-      end
-
-      it "raises errors for malformed responses" do
-        expect { subject.perform }.to raise_error(NoMethodError)
+        expect { subject.perform }.to raise_error(RubyLLM::ServerError)
       end
     end
   end
@@ -323,13 +295,32 @@ RSpec.describe CheckInkClustering::Create do
     end
   end
 
-  describe "function definitions" do
-    it "responds to approve_cluster_creation function" do
-      expect(subject).to respond_to(:approve_cluster_creation)
+  describe "tools" do
+    let(:agent) { CheckInkClustering::Create.new(micro_cluster_agent_log.id) }
+    let(:child_agent_log) { agent.send(:agent_log) }
+
+    describe "ApproveClusterCreation" do
+      let(:tool) { CheckInkClustering::Create::ApproveClusterCreation.new(child_agent_log) }
+
+      it "updates agent log with approval and halts" do
+        result = tool.call(explanation_of_decision: "Correct creation")
+
+        expect(result).to be_a(RubyLLM::Tool::Halt)
+        child_agent_log.reload
+        expect(child_agent_log.extra_data["action"]).to eq("approve")
+      end
     end
 
-    it "responds to reject_cluster_creation function" do
-      expect(subject).to respond_to(:reject_cluster_creation)
+    describe "RejectClusterCreation" do
+      let(:tool) { CheckInkClustering::Create::RejectClusterCreation.new(child_agent_log) }
+
+      it "updates agent log with rejection and halts" do
+        result = tool.call(explanation_of_decision: "Incorrect creation")
+
+        expect(result).to be_a(RubyLLM::Tool::Halt)
+        child_agent_log.reload
+        expect(child_agent_log.extra_data["action"]).to eq("reject")
+      end
     end
   end
 
@@ -389,12 +380,10 @@ RSpec.describe CheckInkClustering::Create do
 
         subject.perform
 
-        # Verify agent log state
         agent_log = subject.send(:agent_log)
         expect(agent_log.state).to eq("waiting-for-approval")
         expect(agent_log.extra_data["action"]).to eq("approve")
 
-        # Verify micro cluster agent log update
         micro_cluster_agent_log.reload
         expect(micro_cluster_agent_log.extra_data["follow_up_done"]).to be true
         expect(micro_cluster_agent_log.extra_data["follow_up_action"]).to eq("approve")
@@ -457,18 +446,15 @@ RSpec.describe CheckInkClustering::Create do
 
         subject.perform
 
-        # Verify jobs were scheduled for both clusters
         expect(RunInkClustererAgent.jobs.size).to eq(2)
         scheduled_args = RunInkClustererAgent.jobs.map { |job| job["args"] }
         expect(scheduled_args).to include(["InkClusterer", returned_clusters[0].id])
         expect(scheduled_args).to include(["InkClusterer", returned_clusters[1].id])
 
-        # Verify agent log state
         agent_log = subject.send(:agent_log)
         expect(agent_log.state).to eq("waiting-for-approval")
         expect(agent_log.extra_data["action"]).to eq("reject")
 
-        # Verify micro cluster agent log update
         micro_cluster_agent_log.reload
         expect(micro_cluster_agent_log.extra_data["follow_up_done"]).to be true
         expect(micro_cluster_agent_log.extra_data["follow_up_action"]).to eq("reject")

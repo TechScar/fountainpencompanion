@@ -1,4 +1,52 @@
 class CheckInkClustering::Assign < CheckInkClustering::Base
+  class ApproveAssignment < RubyLLM::Tool
+    description "Approve the assignment of the ink to the cluster"
+
+    def name = "approve_assignment"
+
+    param :explanation_of_decision, desc: "Explanation of why the assignment is correct"
+
+    attr_accessor :agent_log
+
+    def initialize(agent_log)
+      self.agent_log = agent_log
+    end
+
+    def execute(explanation_of_decision:)
+      agent_log.update(
+        extra_data: {
+          action: CheckInkClustering::Base::APPROVE,
+          explanation_of_decision: explanation_of_decision
+        }
+      )
+      halt "approved"
+    end
+  end
+
+  class RejectAssignment < RubyLLM::Tool
+    description "Reject the assignment of the ink to the cluster"
+
+    def name = "reject_assignment"
+
+    param :explanation_of_decision, desc: "Explanation of why the assignment is incorrect"
+
+    attr_accessor :agent_log
+
+    def initialize(agent_log)
+      self.agent_log = agent_log
+    end
+
+    def execute(explanation_of_decision:)
+      agent_log.update(
+        extra_data: {
+          action: CheckInkClustering::Base::REJECT,
+          explanation_of_decision: explanation_of_decision
+        }
+      )
+      halt "rejected"
+    end
+  end
+
   def system_directive
     <<~TEXT
       You are reviewing the result of a clustering algorithm that clusters inks,
@@ -25,8 +73,14 @@ class CheckInkClustering::Assign < CheckInkClustering::Base
     TEXT
   end
 
-  def after_initialize
-    transcript << { user: macro_cluster_data }
+  private
+
+  def tools
+    base_tools + [ApproveAssignment.new(agent_log), RejectAssignment.new(agent_log)]
+  end
+
+  def extra_context
+    macro_cluster_data
   end
 
   def macro_cluster_data
@@ -35,24 +89,6 @@ class CheckInkClustering::Assign < CheckInkClustering::Base
       names_as_elements: macro_cluster.all_names_as_elements
     }
     "This is the data for the cluster to which the ink was assigned: #{data.to_json}"
-  end
-
-  function :approve_assignment,
-           "Approve the assignment of the ink to the cluster",
-           explanation_of_decision: {
-             type: "string",
-             description: "Explanation of why the assignment is correct"
-           } do |arguments|
-    save_approval_and_stop!(arguments)
-  end
-
-  function :reject_assignment,
-           "Reject the assignment of the ink to the cluster",
-           explanation_of_decision: {
-             type: "string",
-             description: "Explanation of why the assignment is incorrect"
-           } do |arguments|
-    save_rejection_and_stop!(arguments)
   end
 
   def macro_cluster

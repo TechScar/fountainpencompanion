@@ -1,4 +1,52 @@
 class CheckInkClustering::Ignore < CheckInkClustering::Base
+  class ApproveClusterCreation < RubyLLM::Tool
+    description "Approve ignoring of this ink"
+
+    def name = "approve_cluster_creation"
+
+    param :explanation_of_decision, desc: "Explanation of why ignoring the ink was approved"
+
+    attr_accessor :agent_log
+
+    def initialize(agent_log)
+      self.agent_log = agent_log
+    end
+
+    def execute(explanation_of_decision:)
+      agent_log.update(
+        extra_data: {
+          action: CheckInkClustering::Base::APPROVE,
+          explanation_of_decision: explanation_of_decision
+        }
+      )
+      halt "approved"
+    end
+  end
+
+  class RejectClusterCreation < RubyLLM::Tool
+    description "Reject ignoring of this ink"
+
+    def name = "reject_cluster_creation"
+
+    param :explanation_of_decision, desc: "Explanation of why ignoring the ink was rejected"
+
+    attr_accessor :agent_log
+
+    def initialize(agent_log)
+      self.agent_log = agent_log
+    end
+
+    def execute(explanation_of_decision:)
+      agent_log.update(
+        extra_data: {
+          action: CheckInkClustering::Base::REJECT,
+          explanation_of_decision: explanation_of_decision
+        }
+      )
+      halt "rejected"
+    end
+  end
+
   def system_directive
     <<~TEXT
       You are reviewing the result of a clustering algorithm that clusters inks,
@@ -30,21 +78,9 @@ class CheckInkClustering::Ignore < CheckInkClustering::Base
     TEXT
   end
 
-  function :approve_cluster_creation,
-           "Approve ignoring of this ink",
-           explanation_of_decision: {
-             type: "string",
-             description: "Explanation of why ignoring the ink was approved"
-           } do |arguments|
-    save_approval_and_stop!(arguments)
-  end
+  private
 
-  function :reject_cluster_creation,
-           "Reject ignoring of this ink",
-           explanation_of_decision: {
-             type: "string",
-             description: "Explanation of why ignoring the ink was rejected"
-           } do |arguments|
-    save_rejection_and_stop!(arguments)
+  def tools
+    base_tools + [ApproveClusterCreation.new(agent_log), RejectClusterCreation.new(agent_log)]
   end
 end

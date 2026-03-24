@@ -1,4 +1,37 @@
 class CheckInkClustering::Human < CheckInkClustering::Base
+  class SendEmail < RubyLLM::Tool
+    description "Send email to human reviewer"
+
+    def name = "send_email"
+
+    param :subject, desc: "Subject of the email"
+    param :body, desc: "Body of the email"
+
+    def execute(subject:, body:)
+      AdminMailer.agent_mail(subject, body).deliver_later
+      halt "email sent"
+    end
+  end
+
+  class PreviousAgentLogs < RubyLLM::Tool
+    description "All logs of interactions with respect to clustering of this ink"
+
+    def name = "previous_agent_logs"
+
+    attr_accessor :micro_cluster_agent_log, :agent_log
+
+    def initialize(micro_cluster_agent_log, agent_log)
+      self.micro_cluster_agent_log = micro_cluster_agent_log
+      self.agent_log = agent_log
+    end
+
+    def execute
+      micro_cluster = micro_cluster_agent_log.owner
+      logs = micro_cluster.agent_logs.where.not(id: agent_log.id).order(:created_at)
+      logs.map { |l| l.slice(:id, :name, :created_at, :extra_data, :state) }.to_json
+    end
+  end
+
   def system_directive
     <<~TEXT
       You are reviewing the result of a clustering algorithm that clusters inks,
@@ -11,8 +44,11 @@ class CheckInkClustering::Human < CheckInkClustering::Base
   end
 
   def perform
+    return unless micro_cluster_agent_log
+
     if micro_cluster.collected_inks.present?
-      chat_completion(openai: "gpt-4.1", available_tools: %i[send_email previous_agent_logs])
+      prompt = [clustering_explanation, micro_cluster_data].compact.join("\n\n")
+      ask(prompt)
     else
       agent_log.update(
         extra_data: {
@@ -26,24 +62,9 @@ class CheckInkClustering::Human < CheckInkClustering::Base
     micro_cluster_agent_log.approve!
   end
 
-  function :send_email,
-           "Send email to human reviewer",
-           subject: {
-             type: "string",
-             description: "Subject of the email"
-           },
-           body: {
-             type: "string",
-             description: "Body of the email"
-           } do |arguments|
-    AdminMailer.agent_mail(arguments[:subject], arguments[:body]).deliver_later
-    stop_tool_calls_and_respond!
-  end
+  private
 
-  function :previous_agent_logs,
-           "All logs of interactions with respect to clustering of this ink" do
-    micro_cluster = micro_cluster_agent_log.owner
-    logs = micro_cluster.agent_logs.where.not(id: agent_log.id).order(:created_at)
-    logs.map { |l| l.slice(:id, :name, :created_at, :extra_data, :state) }.to_json
+  def tools
+    [SendEmail.new, PreviousAgentLogs.new(micro_cluster_agent_log, agent_log)]
   end
 end
