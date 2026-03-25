@@ -10,12 +10,17 @@ import { UsageRecords } from "./UsageRecords";
 // import { Spam } from "./Spam";
 import { Agents } from "./Agents";
 import { AgentUsage } from "./AgentUsage";
+import { ErrorBoundary } from "../../ErrorBoundary";
 
 document.addEventListener("DOMContentLoaded", () => {
   const el = document.getElementById("signups-graph");
   if (el) {
     const root = createRoot(el);
-    root.render(<SignUps />);
+    root.render(
+      <ErrorBoundary>
+        <SignUps />
+      </ErrorBoundary>
+    );
   }
 });
 
@@ -23,7 +28,11 @@ document.addEventListener("DOMContentLoaded", () => {
   const el = document.getElementById("agents-graph");
   if (el) {
     const root = createRoot(el);
-    root.render(<Agents />);
+    root.render(
+      <ErrorBoundary>
+        <Agents />
+      </ErrorBoundary>
+    );
   }
 });
 
@@ -31,7 +40,11 @@ document.addEventListener("DOMContentLoaded", () => {
   const el = document.getElementById("agent-usage-graph");
   if (el) {
     const root = createRoot(el);
-    root.render(<AgentUsage />);
+    root.render(
+      <ErrorBoundary>
+        <AgentUsage />
+      </ErrorBoundary>
+    );
   }
 });
 
@@ -55,7 +68,11 @@ document.addEventListener("DOMContentLoaded", () => {
   const el = document.getElementById("collected-inks-graph");
   if (el) {
     const root = createRoot(el);
-    root.render(<CollectedInks />);
+    root.render(
+      <ErrorBoundary>
+        <CollectedInks />
+      </ErrorBoundary>
+    );
   }
 });
 
@@ -63,7 +80,11 @@ document.addEventListener("DOMContentLoaded", () => {
   const el = document.getElementById("collected-pens-graph");
   if (el) {
     const root = createRoot(el);
-    root.render(<CollectedPens />);
+    root.render(
+      <ErrorBoundary>
+        <CollectedPens />
+      </ErrorBoundary>
+    );
   }
 });
 
@@ -71,7 +92,11 @@ document.addEventListener("DOMContentLoaded", () => {
   const el = document.getElementById("currently-inked-graph");
   if (el) {
     const root = createRoot(el);
-    root.render(<CurrentlyInked />);
+    root.render(
+      <ErrorBoundary>
+        <CurrentlyInked />
+      </ErrorBoundary>
+    );
   }
 });
 
@@ -79,6 +104,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const el = document.getElementById("usage-records-graph");
   if (el) {
     const root = createRoot(el);
-    root.render(<UsageRecords />);
+    root.render(
+      <ErrorBoundary>
+        <UsageRecords />
+      </ErrorBoundary>
+    );
   }
 });

@@ -1,6 +1,7 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { Autocomplete } from "../components/Autocomplete";
+import { ErrorBoundary } from "../ErrorBoundary";
 
 const CollectedInksAutocomplete = () => {
   // Fetch brand names from API
@@ -68,5 +69,9 @@ document.addEventListener("DOMContentLoaded", () => {
   document.body.appendChild(container);
 
   const root = createRoot(container);
-  root.render(<CollectedInksAutocomplete />);
+  root.render(
+    <ErrorBoundary>
+      <CollectedInksAutocomplete />
+    </ErrorBoundary>
+  );
 });

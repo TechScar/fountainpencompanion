@@ -6,24 +6,27 @@ import { fields } from "./fields";
 import { createMacroClusterAndAssign, getMacroClusters, updateMacroCluster } from "./macroClusters";
 import { assignCluster, getMicroClusters, ignoreCluster } from "./microClusters";
 import { withDistance } from "./withDistance";
+import { ErrorBoundary } from "../../ErrorBoundary";
 
 document.addEventListener("DOMContentLoaded", () => {
   const el = document.getElementById("pens-model-micro-clusters-app");
   if (el) {
     const root = createRoot(el);
     root.render(
-      <App
-        brandSelectorField="simplified_brand"
-        fields={fields}
-        microClusterLoader={getMicroClusters}
-        macroClusterLoader={getMacroClusters}
-        macroClusterUpdater={updateMacroCluster}
-        assignCluster={assignCluster}
-        withDistance={withDistance}
-        ignoreCluster={ignoreCluster}
-        extraColumn={extraColumn}
-        createMacroClusterAndAssign={createMacroClusterAndAssign}
-      />
+      <ErrorBoundary>
+        <App
+          brandSelectorField="simplified_brand"
+          fields={fields}
+          microClusterLoader={getMicroClusters}
+          macroClusterLoader={getMacroClusters}
+          macroClusterUpdater={updateMacroCluster}
+          assignCluster={assignCluster}
+          withDistance={withDistance}
+          ignoreCluster={ignoreCluster}
+          extraColumn={extraColumn}
+          createMacroClusterAndAssign={createMacroClusterAndAssign}
+        />
+      </ErrorBoundary>
     );
   }
 });
