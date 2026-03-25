@@ -620,34 +620,59 @@ RSpec.describe SpamClassifier do
       end
     end
 
-    context "when OpenAI returns unexpected response format" do
-      before(:each) do
+    context "when using ask! (forced tool choice)" do
+      let(:tool_call_response) do
+        {
+          "id" => "chatcmpl-forced",
+          "object" => "chat.completion",
+          "created" => 1_677_652_288,
+          "model" => "gpt-4.1-mini",
+          "choices" => [
+            {
+              "index" => 0,
+              "message" => {
+                "role" => "assistant",
+                "content" => "",
+                "tool_calls" => [
+                  {
+                    "id" => "call_forced",
+                    "type" => "function",
+                    "function" => {
+                      "name" => "classify_as_spam",
+                      "arguments" => { "explanation_of_action" => "Spam detected" }.to_json
+                    }
+                  }
+                ]
+              },
+              "finish_reason" => "tool_calls"
+            }
+          ],
+          "usage" => {
+            "prompt_tokens" => 200,
+            "completion_tokens" => 30,
+            "total_tokens" => 230
+          }
+        }
+      end
+
+      it "sends tool_choice: required to OpenAI" do
         stub_request(:post, "https://api.openai.com/v1/chat/completions").to_return(
           status: 200,
-          body: {
-            "id" => "chatcmpl-error",
-            "choices" => [
-              {
-                "message" => {
-                  "role" => "assistant",
-                  "content" => "I cannot classify this user."
-                }
-              }
-            ],
-            "usage" => {
-              "prompt_tokens" => 100,
-              "completion_tokens" => 10,
-              "total_tokens" => 110
-            }
-          }.to_json,
+          body: tool_call_response.to_json,
           headers: {
             "Content-Type" => "application/json"
           }
         )
-      end
 
-      it "handles response without tool calls gracefully" do
-        expect { subject.perform }.not_to raise_error
+        subject.perform
+
+        expect(WebMock).to have_requested(
+          :post,
+          "https://api.openai.com/v1/chat/completions"
+        ).with { |req|
+          body = JSON.parse(req.body)
+          body["tool_choice"] == "required"
+        }
       end
     end
   end

@@ -29,7 +29,7 @@ class CheckInkClustering::Base
 
     if micro_cluster.collected_inks.present?
       prompt = [clustering_explanation, micro_cluster_data, extra_context].compact.join("\n\n")
-      ask(prompt)
+      ask!(prompt)
       agent_log.waiting_for_approval!
       update_micro_cluster_agent_log!
       execute_decision!

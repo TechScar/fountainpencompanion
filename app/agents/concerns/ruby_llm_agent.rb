@@ -21,6 +21,15 @@ module RubyLlmAgent
     chat.complete
   end
 
+  # Like ask, but forces the LLM to produce a tool call via tool_choice: required.
+  # Use this when a tool call (that halts) is required for the agent to proceed.
+  def ask!(prompt)
+    chat.add_message(role: :user, content: prompt)
+    save_transcript
+    chat.with_tool(nil, choice: :required)
+    chat.complete
+  end
+
   def find_or_create_agent_log(owner)
     @agent_log ||= owner.agent_logs.processing.where(name: self.class.name).first
     @agent_log ||= owner.agent_logs.create!(name: self.class.name, transcript: [])
@@ -96,7 +105,7 @@ module RubyLlmAgent
 
   def serialize_messages(messages)
     messages.map do |msg|
-      entry = { role: msg.role.to_s, content: msg.content.to_s }
+      entry = { role: msg.role.to_s, content: sanitize_for_pg(msg.content.to_s) }
       entry[:tool_calls] = serialize_tool_calls(msg.tool_calls) if msg.tool_call?
       entry[:tool_call_id] = msg.tool_call_id if msg.tool_result?
       entry
@@ -107,12 +116,20 @@ module RubyLlmAgent
     tool_calls.map { |id, tc| { id: id, name: tc.name, arguments: tc.arguments } }
   end
 
+  # PostgreSQL cannot store \u0000 (null bytes) in text/jsonb columns.
+  # LLM responses occasionally contain these characters.
+  def sanitize_for_pg(str)
+    str.delete("\u0000")
+  end
+
   # Restores non-system messages from a previously saved transcript,
   # allowing agents to resume interrupted conversations.
   def restore_transcript(chat)
     return if agent_log.transcript.blank?
 
-    agent_log.transcript.each do |entry|
+    entries = trim_dangling_tool_calls(agent_log.transcript)
+
+    entries.each do |entry|
       entry = entry.deep_symbolize_keys
       next if entry[:role].to_s.in?(%w[system developer])
 
@@ -120,6 +137,21 @@ module RubyLlmAgent
       attrs[:tool_call_id] = entry[:tool_call_id] if entry[:tool_call_id]
       attrs[:tool_calls] = deserialize_tool_calls(entry[:tool_calls]) if entry[:tool_calls]
       chat.add_message(attrs)
+    end
+  end
+
+  # If the transcript ends with an assistant message containing tool_calls
+  # but the corresponding tool responses are missing (e.g. due to a crash),
+  # remove the dangling assistant message so the API won't reject the transcript.
+  def trim_dangling_tool_calls(transcript)
+    entries = transcript.map(&:deep_symbolize_keys)
+    return entries if entries.empty?
+
+    last = entries.last
+    if last[:tool_calls].present? && last[:role].to_s == "assistant"
+      entries[0...-1]
+    else
+      entries
     end
   end
 

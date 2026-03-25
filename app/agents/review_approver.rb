@@ -99,7 +99,7 @@ class ReviewApprover
   end
 
   def perform
-    ask(user_prompt)
+    ask!(user_prompt)
     agent_log.update!(extra_data: ink_review.extra_data)
     agent_log.waiting_for_approval!
   end

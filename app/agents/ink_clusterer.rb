@@ -176,7 +176,7 @@ class InkClusterer
 
   def perform
     if micro_cluster.collected_inks.present?
-      ask(user_prompt)
+      ask!(user_prompt)
       agent_log.waiting_for_approval!
       schedule_follow_up!
     else
