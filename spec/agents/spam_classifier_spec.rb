@@ -620,36 +620,10 @@ RSpec.describe SpamClassifier do
       end
     end
 
-    context "when OpenAI returns text instead of tool calls" do
-      let(:text_response) do
+    context "when using ask! (forced tool choice)" do
+      let(:tool_call_response) do
         {
-          "id" => "chatcmpl-error",
-          "choices" => [
-            { "message" => { "role" => "assistant", "content" => "I cannot classify this user." } }
-          ],
-          "usage" => {
-            "prompt_tokens" => 100,
-            "completion_tokens" => 10,
-            "total_tokens" => 110
-          }
-        }
-      end
-
-      it "raises after exhausting retries when no tool call is ever made" do
-        stub_request(:post, "https://api.openai.com/v1/chat/completions").to_return(
-          status: 200,
-          body: text_response.to_json,
-          headers: {
-            "Content-Type" => "application/json"
-          }
-        )
-
-        expect { subject.perform }.to raise_error(RuntimeError, /failed to produce a tool call/)
-      end
-
-      it "retries and succeeds when tool call is made on second attempt" do
-        tool_call_response = {
-          "id" => "chatcmpl-retry",
+          "id" => "chatcmpl-forced",
           "object" => "chat.completion",
           "created" => 1_677_652_288,
           "model" => "gpt-4.1-mini",
@@ -661,13 +635,11 @@ RSpec.describe SpamClassifier do
                 "content" => "",
                 "tool_calls" => [
                   {
-                    "id" => "call_retry",
+                    "id" => "call_forced",
                     "type" => "function",
                     "function" => {
                       "name" => "classify_as_spam",
-                      "arguments" => {
-                        "explanation_of_action" => "Spam patterns detected on retry"
-                      }.to_json
+                      "arguments" => { "explanation_of_action" => "Spam detected" }.to_json
                     }
                   }
                 ]
@@ -681,28 +653,26 @@ RSpec.describe SpamClassifier do
             "total_tokens" => 230
           }
         }
+      end
 
-        stub_request(:post, "https://api.openai.com/v1/chat/completions")
-          .to_return(
-            status: 200,
-            body: text_response.to_json,
-            headers: {
-              "Content-Type" => "application/json"
-            }
-          )
-          .then
-          .to_return(
-            status: 200,
-            body: tool_call_response.to_json,
-            headers: {
-              "Content-Type" => "application/json"
-            }
-          )
+      it "sends tool_choice: required to OpenAI" do
+        stub_request(:post, "https://api.openai.com/v1/chat/completions").to_return(
+          status: 200,
+          body: tool_call_response.to_json,
+          headers: {
+            "Content-Type" => "application/json"
+          }
+        )
 
         subject.perform
 
-        expect(subject.agent_log.extra_data["spam"]).to be true
-        expect(subject.agent_log.state).to eq("waiting-for-approval")
+        expect(WebMock).to have_requested(
+          :post,
+          "https://api.openai.com/v1/chat/completions"
+        ).with { |req|
+          body = JSON.parse(req.body)
+          body["tool_choice"] == "required"
+        }
       end
     end
   end

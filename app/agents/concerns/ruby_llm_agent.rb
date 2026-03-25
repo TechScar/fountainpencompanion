@@ -21,22 +21,13 @@ module RubyLlmAgent
     chat.complete
   end
 
-  # Like ask, but retries if the LLM responds with text instead of a tool call.
+  # Like ask, but forces the LLM to produce a tool call via tool_choice: required.
   # Use this when a tool call (that halts) is required for the agent to proceed.
   def ask!(prompt)
-    result = ask(prompt)
-    retries = 0
-
-    while result.is_a?(RubyLLM::Message) && retries < MAX_TOOL_RETRIES
-      retries += 1
-      result = ask(TOOL_RETRY_PROMPT)
-    end
-
-    if result.is_a?(RubyLLM::Message)
-      raise "Agent failed to produce a tool call after #{MAX_TOOL_RETRIES} retries"
-    end
-
-    result
+    chat.add_message(role: :user, content: prompt)
+    save_transcript
+    chat.with_tool(nil, choice: :required)
+    chat.complete
   end
 
   def find_or_create_agent_log(owner)
@@ -84,9 +75,6 @@ module RubyLlmAgent
   end
 
   MAX_TOOL_CALLS = 50
-  MAX_TOOL_RETRIES = 3
-  TOOL_RETRY_PROMPT =
-    "You must use one of the provided tools to complete your task. Do not respond with text."
 
   # Multiple saves per round-trip are intentional: we save after each
   # interaction so the agent log reflects progress incrementally.
