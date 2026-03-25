@@ -51,7 +51,7 @@ class SpamClassifier
   end
 
   def perform
-    ask(user_prompt)
+    ask!(user_prompt)
     agent_log.waiting_for_approval!
   end
 
