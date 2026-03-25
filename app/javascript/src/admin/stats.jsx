@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { getRequest } from "../fetch";
-import { ErrorBoundary } from "../../ErrorBoundary";
+import { ErrorBoundary } from "../ErrorBoundary";
 
 document.addEventListener("DOMContentLoaded", () => {
   const elements = document.querySelectorAll(".stats");
