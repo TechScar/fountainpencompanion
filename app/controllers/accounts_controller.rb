@@ -4,7 +4,7 @@ class AccountsController < ApplicationController
   def show
     respond_to do |format|
       format.html
-      format.jsonapi { render jsonapi: current_user, include: :collected_inks }
+      format.jsonapi { render jsonapi: current_user, **show_options }
     end
   end
 
@@ -20,12 +20,48 @@ class AccountsController < ApplicationController
         end
       end
       format.json { head :ok }
+      format.jsonapi { render jsonapi: current_user }
     end
   end
 
   private
 
+  def show_options
+    options = {}
+    if params[:include].present?
+      options[:include] = params[:include].split(",").map { |i| i.strip.to_sym }
+    end
+    options
+  end
+
+  PREFERENCE_KEYS = %w[
+    collected_inks_table_hidden_fields
+    collected_inks_cards_hidden_fields
+    collected_pens_table_hidden_fields
+    collected_pens_cards_hidden_fields
+    currently_inked_table_hidden_fields
+    currently_inked_cards_hidden_fields
+  ].freeze
+
   def accounts_params
-    (params["_jsonapi"] || params).require(:user).permit(:name, :blurb, :time_zone)
+    raw = (params["_jsonapi"] || params).require(:user)
+    permitted = raw.permit(:name, :blurb, :time_zone)
+
+    raw_prefs = raw[:preferences]
+    if raw_prefs.present?
+      merged = current_user.preferences.dup
+      raw_prefs.each do |key, value|
+        next unless PREFERENCE_KEYS.include?(key.to_s)
+
+        if value.nil?
+          merged.delete(key.to_s)
+        else
+          merged[key.to_s] = value
+        end
+      end
+      permitted[:preferences] = merged
+    end
+
+    permitted
   end
 end

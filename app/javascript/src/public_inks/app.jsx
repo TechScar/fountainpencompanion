@@ -53,7 +53,7 @@ export default class App extends React.Component {
 }
 
 function getloggedInUserData(callback) {
-  return getRequest("/account").then((response) => {
+  return getRequest("/account?include=collected_inks").then((response) => {
     if (response.ok) {
       response.json().then((json) => callback(processData(json)));
     }
