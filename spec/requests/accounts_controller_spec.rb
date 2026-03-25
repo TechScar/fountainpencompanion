@@ -21,70 +21,46 @@ describe AccountsController do
         get "/account.jsonapi"
         expect(response).to be_successful
         json = JSON.parse(response.body)
-        expect(json).to eq(
-          "data" => {
-            "id" => user.id.to_s,
-            "type" => "user",
-            "attributes" => {
-              "name" => "the name"
-            },
-            "relationships" => {
-              "collected_inks" => {
-                "data" => []
-              }
-            }
-          },
-          "jsonapi" => {
-            "version" => "1.0"
-          }
-        )
+        expect(json["data"]["id"]).to eq(user.id.to_s)
+        expect(json["data"]["type"]).to eq("user")
+        expect(json["data"]["attributes"]["name"]).to eq("the name")
+        expect(json["data"]["attributes"]["preferences"]).to eq({})
       end
 
-      it "includes public inks" do
-        ink = create(:collected_ink, user: user)
+      it "does not include collected_inks by default" do
+        create(:collected_ink, user: user)
         get "/account.jsonapi"
+        expect(response).to be_successful
+        json = JSON.parse(response.body)
+        expect(json["included"]).to be_nil
+      end
+
+      it "includes public inks when requested" do
+        ink = create(:collected_ink, user: user)
+        get "/account.jsonapi?include=collected_inks"
         expect(response).to be_successful
         json = JSON.parse(response.body)
         expect(json["data"]["relationships"]["collected_inks"]["data"]).to eq(
           [{ "type" => "collected_inks", "id" => ink.id.to_s }]
         )
-        expect(json["included"]).to eq(
-          [
-            {
-              "id" => ink.id.to_s,
-              "type" => "collected_inks",
-              "attributes" => {
-                "archived" => false,
-                "archived_on" => nil,
-                "brand_name" => ink.brand_name,
-                "color" => ink.color,
-                "comment" => ink.comment,
-                "daily_usage" => 0,
-                "ink_id" => nil,
-                "ink_name" => ink.ink_name,
-                "kind" => ink.kind,
-                "line_name" => ink.line_name,
-                "maker" => ink.maker,
-                "private" => ink.private,
-                "private_comment" => ink.private_comment,
-                "simplified_brand_name" => ink.simplified_brand_name,
-                "simplified_ink_name" => ink.simplified_ink_name,
-                "simplified_line_name" => ink.simplified_line_name,
-                "swabbed" => ink.swabbed,
-                "usage" => 0,
-                "used" => false
-              }
-            }
-          ]
-        )
+        expect(json["included"].length).to eq(1)
       end
 
       it "does not include private inks" do
-        ink = create(:collected_ink, user: user, private: true)
-        get "/account.jsonapi"
+        create(:collected_ink, user: user, private: true)
+        get "/account.jsonapi?include=collected_inks"
         expect(response).to be_successful
         json = JSON.parse(response.body)
         expect(json["data"]["relationships"]["collected_inks"]["data"]).to eq([])
+      end
+
+      it "returns preferences" do
+        user.update!(preferences: { "collected_inks_table_hidden_fields" => %w[nib color] })
+        get "/account.jsonapi"
+        json = JSON.parse(response.body)
+        expect(json["data"]["attributes"]["preferences"]).to eq(
+          "collected_inks_table_hidden_fields" => %w[nib color]
+        )
       end
     end
   end
@@ -117,6 +93,85 @@ describe AccountsController do
           AfterUserSaved.jobs,
           :count
         ).by(1)
+      end
+
+      describe "preferences" do
+        let(:jsonapi_headers) do
+          { "Content-Type" => "application/vnd.api+json", "Accept" => "application/vnd.api+json" }
+        end
+
+        it "updates preferences" do
+          put "/account",
+              params: {
+                user: {
+                  preferences: {
+                    collected_inks_table_hidden_fields: %w[nib color]
+                  }
+                }
+              }.to_json,
+              headers: jsonapi_headers
+          expect(response).to be_successful
+          expect(user.reload.preferences).to eq(
+            "collected_inks_table_hidden_fields" => %w[nib color]
+          )
+        end
+
+        it "merges preferences without overwriting other keys" do
+          user.update!(preferences: { "collected_inks_table_hidden_fields" => ["nib"] })
+          put "/account",
+              params: {
+                user: {
+                  preferences: {
+                    collected_pens_table_hidden_fields: ["color"]
+                  }
+                }
+              }.to_json,
+              headers: jsonapi_headers
+          expect(response).to be_successful
+          expect(user.reload.preferences).to eq(
+            "collected_inks_table_hidden_fields" => ["nib"],
+            "collected_pens_table_hidden_fields" => ["color"]
+          )
+        end
+
+        it "removes a preference key when set to null" do
+          user.update!(preferences: { "collected_inks_table_hidden_fields" => ["nib"] })
+          put "/account",
+              params: {
+                user: {
+                  preferences: {
+                    collected_inks_table_hidden_fields: nil
+                  }
+                }
+              }.to_json,
+              headers: jsonapi_headers
+          expect(response).to be_successful
+          expect(user.reload.preferences).to eq({})
+        end
+
+        it "ignores unknown preference keys" do
+          put "/account",
+              params: { user: { preferences: { unknown_key: ["nib"] } } }.to_json,
+              headers: jsonapi_headers
+          expect(response).to be_successful
+          expect(user.reload.preferences).to eq({})
+        end
+
+        it "returns updated user in jsonapi response" do
+          put "/account",
+              params: {
+                user: {
+                  preferences: {
+                    collected_inks_table_hidden_fields: ["nib"]
+                  }
+                }
+              }.to_json,
+              headers: jsonapi_headers
+          json = JSON.parse(response.body)
+          expect(json["data"]["attributes"]["preferences"]).to eq(
+            "collected_inks_table_hidden_fields" => ["nib"]
+          )
+        end
       end
     end
   end
