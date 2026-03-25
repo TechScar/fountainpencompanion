@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { createRoot } from "react-dom/client";
+import { ErrorBoundary } from "../ErrorBoundary";
 
 document.addEventListener("DOMContentLoaded", () => {
   const form = document.getElementById("new_collected_ink");
@@ -7,7 +8,11 @@ document.addEventListener("DOMContentLoaded", () => {
   if (!form || !el) return;
 
   const root = createRoot(el);
-  root.render(<InkSearchHint form={form} />);
+  root.render(
+    <ErrorBoundary>
+      <InkSearchHint form={form} />
+    </ErrorBoundary>
+  );
 });
 
 const InkSearchHint = ({ form }) => {

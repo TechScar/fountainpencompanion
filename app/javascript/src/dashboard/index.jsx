@@ -8,12 +8,17 @@ import { PensSummaryWidget } from "./pens_summary_widget";
 import { InksVisualizationWidget } from "./inks_visualization_widget";
 import { createRoot } from "react-dom/client";
 import { PenAndInkSuggestionWidget } from "./pen_and_ink_suggestion_widget";
+import { ErrorBoundary } from "../ErrorBoundary";
 
 document.addEventListener("DOMContentLoaded", () => {
   const el = document.getElementById("dashboard");
   if (el) {
     const root = createRoot(el);
-    root.render(<Dashboard />);
+    root.render(
+      <ErrorBoundary>
+        <Dashboard />
+      </ErrorBoundary>
+    );
   }
 });
 

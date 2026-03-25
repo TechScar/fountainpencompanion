@@ -1,12 +1,17 @@
 import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { getRequest } from "../fetch";
+import { ErrorBoundary } from "../ErrorBoundary";
 
 document.addEventListener("DOMContentLoaded", () => {
   const elements = document.querySelectorAll(".stats");
   Array.from(elements).forEach((el) => {
     const root = createRoot(el);
-    root.render(<Stat id={el.dataset.id} arg={el.dataset.arg} />);
+    root.render(
+      <ErrorBoundary>
+        <Stat id={el.dataset.id} arg={el.dataset.arg} />
+      </ErrorBoundary>
+    );
   });
 });
 
@@ -15,12 +20,14 @@ document.addEventListener("DOMContentLoaded", () => {
   Array.from(elements).forEach((el) => {
     const root = createRoot(el);
     root.render(
-      <ConditionalStat
-        id={el.dataset.id}
-        arg={el.dataset.arg}
-        href={el.dataset.href}
-        template={el.dataset.template}
-      />
+      <ErrorBoundary>
+        <ConditionalStat
+          id={el.dataset.id}
+          arg={el.dataset.arg}
+          href={el.dataset.href}
+          template={el.dataset.template}
+        />
+      </ErrorBoundary>
     );
   });
 });

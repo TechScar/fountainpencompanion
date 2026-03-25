@@ -1,6 +1,7 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { Autocomplete } from "../components/Autocomplete";
+import { ErrorBoundary } from "../ErrorBoundary";
 
 const CollectedPensAutocomplete = () => {
   // Simple fetch function for endpoints that return an array directly
@@ -30,5 +31,9 @@ document.addEventListener("DOMContentLoaded", () => {
   document.body.appendChild(container);
 
   const root = createRoot(container);
-  root.render(<CollectedPensAutocomplete />);
+  root.render(
+    <ErrorBoundary>
+      <CollectedPensAutocomplete />
+    </ErrorBoundary>
+  );
 });

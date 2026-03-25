@@ -1,13 +1,18 @@
 import React, { useState, useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import { ChromePicker } from "react-color";
+import { ErrorBoundary } from "../ErrorBoundary";
 
 document.addEventListener("DOMContentLoaded", () => {
   const elements = document.getElementsByClassName("color-picker");
   Array.from(elements).forEach((el) => {
     const input = document.getElementById(el.getAttribute("data-input"));
     const root = createRoot(el);
-    root.render(<ColorPicker input={input} />);
+    root.render(
+      <ErrorBoundary>
+        <ColorPicker input={input} />
+      </ErrorBoundary>
+    );
   });
 });
 

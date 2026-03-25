@@ -41,6 +41,15 @@ jest.mock("admin/micro-clusters/withDistance", () => ({
   withDistance: jest.fn()
 }));
 
+jest.mock("@honeybadger-io/js", () => ({
+  __esModule: true,
+  default: { configure: jest.fn(), notify: jest.fn() }
+}));
+
+jest.mock("@honeybadger-io/react", () => ({
+  HoneybadgerErrorBoundary: ({ children }) => children
+}));
+
 describe("micro-clusters index", () => {
   let mockCreateRoot;
   let mockRender;
@@ -109,12 +118,12 @@ describe("micro-clusters index", () => {
     const eventHandler = addEventListenerSpy.mock.calls[0][1];
     eventHandler();
 
-    expect(mockRender).toHaveBeenCalledWith(
+    const appElement = mockRender.mock.calls[0][0].props.children;
+
+    expect(appElement.props).toEqual(
       expect.objectContaining({
-        props: expect.objectContaining({
-          brandSelectorField: "simplified_brand_name",
-          fields: ["brand_name", "line_name", "ink_name"]
-        })
+        brandSelectorField: "simplified_brand_name",
+        fields: ["brand_name", "line_name", "ink_name"]
       })
     );
   });
@@ -127,7 +136,7 @@ describe("micro-clusters index", () => {
     const eventHandler = addEventListenerSpy.mock.calls[0][1];
     eventHandler();
 
-    const appProps = mockRender.mock.calls[0][0].props;
+    const appProps = mockRender.mock.calls[0][0].props.children.props;
 
     expect(appProps).toHaveProperty("microClusterLoader");
     expect(appProps).toHaveProperty("macroClusterLoader");

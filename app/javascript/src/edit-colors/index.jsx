@@ -1,6 +1,7 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./app";
+import { ErrorBoundary } from "../ErrorBoundary";
 
 document.addEventListener("DOMContentLoaded", () => {
   const elements = document.querySelectorAll(".fpc-edit-colors");
@@ -9,14 +10,16 @@ document.addEventListener("DOMContentLoaded", () => {
     const ignoredColors = JSON.parse(el.dataset.ignoredColors);
     const root = createRoot(el);
     root.render(
-      <App
-        colors={colors}
-        ignoredColors={ignoredColors}
-        submitUrl={el.dataset.submitUrl}
-        cancelUrl={el.dataset.cancelUrl}
-        currentColor={el.dataset.currentColor}
-        csrfToken={el.dataset.csrfToken}
-      />
+      <ErrorBoundary>
+        <App
+          colors={colors}
+          ignoredColors={ignoredColors}
+          submitUrl={el.dataset.submitUrl}
+          cancelUrl={el.dataset.cancelUrl}
+          currentColor={el.dataset.currentColor}
+          csrfToken={el.dataset.csrfToken}
+        />
+      </ErrorBoundary>
     );
   });
 });
