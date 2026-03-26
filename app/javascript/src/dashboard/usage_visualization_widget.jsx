@@ -110,6 +110,8 @@ export const UsageVisualizationWidget = ({ renderWhenInvisible }) => {
 // No time limit — animation runs until component unmounts
 const GRID_SIZE = 140;
 const SWAP_RADIUS = 15;
+const BLUR_RADIUS = 2;
+const RENDER_SCALE = 2;
 
 function buildGrid(entries, cols, rows) {
   const totalPixels = cols * rows;
@@ -352,34 +354,125 @@ function simulationTick(grid, inkNames, cols, rows, rawCenters, blendedCenters, 
   return dirty;
 }
 
-function cellRect(col, row, cols, rows, canvasW, canvasH) {
-  const x = Math.floor((col * canvasW) / cols);
-  const y = Math.floor((row * canvasH) / rows);
-  const w = Math.floor(((col + 1) * canvasW) / cols) - x;
-  const h = Math.floor(((row + 1) * canvasH) / rows) - y;
-  return { x, y, w, h };
+function gaussianKernel(radius) {
+  const sigma = radius / 2;
+  const size = radius * 2 + 1;
+  const kernel = new Float32Array(size);
+  let sum = 0;
+  for (let i = 0; i < size; i++) {
+    const x = i - radius;
+    kernel[i] = Math.exp(-(x * x) / (2 * sigma * sigma));
+    sum += kernel[i];
+  }
+  for (let i = 0; i < size; i++) kernel[i] /= sum;
+  return kernel;
 }
 
-function drawGrid(ctx, grid, cols, canvasW, canvasH) {
-  const rows = grid.length / cols;
-  for (let i = 0; i < grid.length; i++) {
-    const row = Math.floor(i / cols);
-    const col = i % cols;
-    const { x, y, w, h } = cellRect(col, row, cols, rows, canvasW, canvasH);
-    ctx.fillStyle = grid[i];
-    ctx.fillRect(x, y, w, h);
+function blurPass(src, dst, w, h, kernel, horizontal) {
+  const r = (kernel.length - 1) / 2;
+  if (horizontal) {
+    for (let y = 0; y < h; y++) {
+      const rowOff = y * w;
+      for (let x = 0; x < w; x++) {
+        let sum = 0;
+        for (let k = -r; k <= r; k++) {
+          sum += src[rowOff + ((x + k + w) % w)] * kernel[k + r];
+        }
+        dst[rowOff + x] = sum;
+      }
+    }
+  } else {
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        let sum = 0;
+        for (let k = -r; k <= r; k++) {
+          sum += src[((y + k + h) % h) * w + x] * kernel[k + r];
+        }
+        dst[y * w + x] = sum;
+      }
+    }
   }
 }
 
-function drawDirty(ctx, grid, dirty, cols, canvasW, canvasH) {
-  const rows = grid.length / cols;
-  for (const i of dirty) {
-    const row = Math.floor(i / cols);
-    const col = i % cols;
-    const { x, y, w, h } = cellRect(col, row, cols, rows, canvasW, canvasH);
-    ctx.fillStyle = grid[i];
-    ctx.fillRect(x, y, w, h);
+function buildAndBlurMask(
+  grid,
+  totalPixels,
+  color,
+  maskBuffer,
+  blurTemp,
+  blurred,
+  cols,
+  rows,
+  kernel
+) {
+  maskBuffer.fill(0);
+  for (let i = 0; i < totalPixels; i++) {
+    if (grid[i] === color) maskBuffer[i] = 1.0;
   }
+  blurPass(maskBuffer, blurTemp, cols, rows, kernel, true);
+  blurPass(blurTemp, blurred, cols, rows, kernel, false);
+}
+
+function upsampleMask(src, dst, srcW, srcH, dstW, dstH) {
+  const scaleX = srcW / dstW;
+  const scaleY = srcH / dstH;
+  for (let dy = 0; dy < dstH; dy++) {
+    const sy = dy * scaleY;
+    const y0 = Math.floor(sy);
+    const y1 = (y0 + 1) % srcH;
+    const fy = sy - y0;
+    for (let dx = 0; dx < dstW; dx++) {
+      const sx = dx * scaleX;
+      const x0 = Math.floor(sx);
+      const x1 = (x0 + 1) % srcW;
+      const fx = sx - x0;
+      dst[dy * dstW + dx] =
+        src[y0 * srcW + x0] * (1 - fx) * (1 - fy) +
+        src[y0 * srcW + x1] * fx * (1 - fy) +
+        src[y1 * srcW + x0] * (1 - fx) * fy +
+        src[y1 * srcW + x1] * fx * fy;
+    }
+  }
+}
+
+function renderVoronoi(
+  mainCtx,
+  offCtx,
+  imageData,
+  upsampledMasks,
+  colors,
+  colorRgb,
+  renderW,
+  renderH,
+  canvasSize
+) {
+  const numColors = colors.length;
+  const maskArrays = colors.map((c) => upsampledMasks.get(c));
+  const data = imageData.data;
+  const totalPixels = renderW * renderH;
+
+  for (let i = 0; i < totalPixels; i++) {
+    let maxVal = -1;
+    let maxIdx = 0;
+    for (let c = 0; c < numColors; c++) {
+      const val = maskArrays[c][i];
+      if (val > maxVal) {
+        maxVal = val;
+        maxIdx = c;
+      }
+    }
+    const rgb = colorRgb[maxIdx];
+    const off = i * 4;
+    data[off] = rgb[0];
+    data[off + 1] = rgb[1];
+    data[off + 2] = rgb[2];
+    data[off + 3] = 255;
+  }
+
+  offCtx.putImageData(imageData, 0, 0);
+  mainCtx.imageSmoothingEnabled = true;
+  mainCtx.imageSmoothingQuality = "high";
+  mainCtx.drawImage(offCtx.canvas, 0, 0, canvasSize, canvasSize);
 }
 
 const UsageVisualizationWidgetContent = ({ range, setRange, speed, setSpeed }) => {
@@ -454,7 +547,43 @@ const UsageVisualizationWidgetContent = ({ range, setRange, speed, setSpeed }) =
     gridRef.current = grid;
     inkNamesRef.current = inkNames;
 
-    drawGrid(ctx, grid, cols, canvasSize, canvasSize);
+    // Voronoi rendering setup
+    const kernel = gaussianKernel(BLUR_RADIUS);
+    const uniqueColors = entries.map((e) => e.color);
+    const colorRgb = uniqueColors.map((hex) => convert.hex.rgb(hex));
+    const blurredMasks = new Map();
+    const upsampledMasks = new Map();
+    const maskBuffer = new Float32Array(totalPixels);
+    const blurTemp = new Float32Array(totalPixels);
+    const renderW = cols * RENDER_SCALE;
+    const renderH = rows * RENDER_SCALE;
+    const offscreen = document.createElement("canvas");
+    offscreen.width = renderW;
+    offscreen.height = renderH;
+    const offCtx = offscreen.getContext("2d");
+    const voronoiImageData = offCtx.createImageData(renderW, renderH);
+
+    // Build, blur, and upsample initial masks for all colors
+    for (const color of uniqueColors) {
+      const blurred = new Float32Array(totalPixels);
+      buildAndBlurMask(grid, totalPixels, color, maskBuffer, blurTemp, blurred, cols, rows, kernel);
+      blurredMasks.set(color, blurred);
+      const upsampled = new Float32Array(renderW * renderH);
+      upsampleMask(blurred, upsampled, cols, rows, renderW, renderH);
+      upsampledMasks.set(color, upsampled);
+    }
+
+    renderVoronoi(
+      ctx,
+      offCtx,
+      voronoiImageData,
+      upsampledMasks,
+      uniqueColors,
+      colorRgb,
+      renderW,
+      renderH,
+      canvasSize
+    );
 
     let lastFrame = performance.now();
     let autoStopped = false;
@@ -483,10 +612,44 @@ const UsageVisualizationWidgetContent = ({ range, setRange, speed, setSpeed }) =
           currentSpeed ? currentSpeed.multiplier : 3
         );
         if (dirty.size > 0) {
-          drawDirty(ctx, grid, dirty, cols, canvasSize, canvasSize);
+          // Rebuild blurred masks for colors that had cells change
+          const dirtyColors = new Set();
+          for (const i of dirty) dirtyColors.add(grid[i]);
+          for (const color of dirtyColors) {
+            buildAndBlurMask(
+              grid,
+              totalPixels,
+              color,
+              maskBuffer,
+              blurTemp,
+              blurredMasks.get(color),
+              cols,
+              rows,
+              kernel
+            );
+            upsampleMask(
+              blurredMasks.get(color),
+              upsampledMasks.get(color),
+              cols,
+              rows,
+              renderW,
+              renderH
+            );
+          }
+          renderVoronoi(
+            ctx,
+            offCtx,
+            voronoiImageData,
+            upsampledMasks,
+            uniqueColors,
+            colorRgb,
+            renderW,
+            renderH,
+            canvasSize
+          );
         }
         // Auto-stop once when converged
-        if (!autoStopped && dirty.size < totalPixels * 0.005) {
+        if (!autoStopped && dirty.size < totalPixels * 0.02) {
           autoStopped = true;
           runningRef.current = false;
           setRunning(false);
