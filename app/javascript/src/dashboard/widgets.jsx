@@ -59,10 +59,14 @@ const WidgetContent = ({ children, path, withLinks, paginated }) => {
     if (!path) return;
 
     async function fetchData() {
-      if (paginated) {
-        setData(await getPaginatedData(path));
-      } else {
-        setData(await getData(path));
+      try {
+        if (paginated) {
+          setData(await getPaginatedData(path));
+        } else {
+          setData(await getData(path));
+        }
+      } catch (error) {
+        console.error("Failed to fetch widget data:", error);
       }
     }
     fetchData();
