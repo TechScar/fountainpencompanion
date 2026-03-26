@@ -43,6 +43,7 @@ class AccountsController < ApplicationController
     currently_inked_cards_hidden_fields
     dashboard_widgets
     usage_visualization_range
+    usage_visualization_speed
   ].freeze
 
   def accounts_params

@@ -10,6 +10,9 @@
   display: grid;
   gap: b.$spacer;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  @media (min-width: 1600px) {
+    grid-template-columns: repeat(4, 1fr);
+  }
   grid-template-rows: auto;
 
   // Ensure all widgets in the same row stretch to equal height.
@@ -99,16 +102,8 @@
 }
 
 .fpc-usage-visualization {
-  display: grid;
-  overflow: hidden;
-
-  &__cell {
+  &__canvas {
     display: block;
-  }
-
-  &__range-picker {
-    float: right;
-    margin-top: -(b.$spacer * 2.5);
   }
 
   &__empty {

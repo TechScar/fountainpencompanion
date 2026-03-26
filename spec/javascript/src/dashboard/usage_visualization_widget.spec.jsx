@@ -5,6 +5,18 @@ import { render, screen } from "@testing-library/react";
 
 import { UsageVisualizationWidget } from "dashboard/usage_visualization_widget";
 
+beforeAll(() => {
+  global.IntersectionObserver = class {
+    constructor(cb) {
+      this.cb = cb;
+    }
+    observe() {
+      this.cb([{ isIntersecting: true }]);
+    }
+    disconnect() {}
+  };
+});
+
 const widgetData = (entries = [], source = "usage_records", totalCount = 0) => ({
   data: {
     type: "widget",
@@ -48,10 +60,13 @@ describe("UsageVisualizationWidget", () => {
   });
   afterAll(() => server.close());
 
-  it("renders colored cells", async () => {
+  it("renders a canvas when data is present", async () => {
     render(<UsageVisualizationWidget renderWhenInvisible />);
-    const cells = await screen.findAllByTitle(/Pilot Blue|Diamine Red/);
-    expect(cells.length).toBe(8);
+    // Wait for data to load by finding the range picker first
+    await screen.findByDisplayValue("1 month");
+    const canvas = document.querySelector(".fpc-usage-visualization__canvas");
+    expect(canvas).toBeTruthy();
+    expect(canvas.tagName).toBe("CANVAS");
   });
 
   it("renders range picker select", async () => {
