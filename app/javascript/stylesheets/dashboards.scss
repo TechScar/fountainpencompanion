@@ -11,11 +11,34 @@
   gap: b.$spacer;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   grid-template-rows: auto;
+
+  // Ensure all widgets in the same row stretch to equal height.
+  // Direct grid children (TrackVisibility wrappers or configurable wrappers)
+  // and their nested cards must all fill the row.
+  > * {
+    display: flex;
+    flex-direction: column;
+
+    > * {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+  }
 }
 
 .fpc-dashboard-widget {
   background: var(--fpc-bright-background);
   min-height: 200px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+
+  > .card-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
 
   &--with-links {
     position: relative;
