@@ -23,9 +23,13 @@ export const HiddenWidget = ({ id, onAdd }) => {
 export const DraggableWidget = ({
   id,
   index,
+  isFirst,
+  isLast,
   configuring,
   dragging,
   onRemove,
+  onMoveUp,
+  onMoveDown,
   onDragStart,
   onDragOver,
   onDrop,
@@ -53,6 +57,26 @@ export const DraggableWidget = ({
       onDragEnd={onDragEnd}
     >
       <div className="fpc-dashboard-widget-overlay">
+        <div className="fpc-dashboard-widget-overlay__reorder">
+          <button
+            type="button"
+            className="btn btn-sm btn-outline-secondary"
+            disabled={isFirst}
+            onClick={() => onMoveUp(index)}
+            aria-label={`Move ${widget ? widget.label : id} up`}
+          >
+            &uarr;
+          </button>
+          <button
+            type="button"
+            className="btn btn-sm btn-outline-secondary"
+            disabled={isLast}
+            onClick={() => onMoveDown(index)}
+            aria-label={`Move ${widget ? widget.label : id} down`}
+          >
+            &darr;
+          </button>
+        </div>
         <button
           type="button"
           className="btn btn-sm btn-outline-danger"

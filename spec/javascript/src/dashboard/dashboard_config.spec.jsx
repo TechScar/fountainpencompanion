@@ -22,9 +22,13 @@ describe("DraggableWidget", () => {
   const defaultProps = {
     id: "inks_summary",
     index: 0,
+    isFirst: true,
+    isLast: false,
     configuring: true,
     dragging: false,
     onRemove: jest.fn(),
+    onMoveUp: jest.fn(),
+    onMoveDown: jest.fn(),
     onDragStart: jest.fn(),
     onDragOver: jest.fn(),
     onDrop: jest.fn(),
@@ -39,6 +43,8 @@ describe("DraggableWidget", () => {
     );
     expect(screen.getByTestId("child")).toBeInTheDocument();
     expect(screen.queryByLabelText("Remove Inks Summary")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Move Inks Summary up")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Move Inks Summary down")).not.toBeInTheDocument();
   });
 
   it("wraps children with remove button when configuring", () => {
@@ -60,6 +66,68 @@ describe("DraggableWidget", () => {
     );
     fireEvent.click(screen.getByLabelText("Remove Inks Summary"));
     expect(onRemove).toHaveBeenCalledWith("inks_summary");
+  });
+
+  it("renders move up and move down buttons when configuring", () => {
+    render(
+      <DraggableWidget {...defaultProps} isFirst={false} isLast={false}>
+        <div>Content</div>
+      </DraggableWidget>
+    );
+    expect(screen.getByLabelText("Move Inks Summary up")).toBeEnabled();
+    expect(screen.getByLabelText("Move Inks Summary down")).toBeEnabled();
+  });
+
+  it("disables both move buttons when only widget", () => {
+    render(
+      <DraggableWidget {...defaultProps} isFirst={true} isLast={true}>
+        <div>Content</div>
+      </DraggableWidget>
+    );
+    expect(screen.getByLabelText("Move Inks Summary up")).toBeDisabled();
+    expect(screen.getByLabelText("Move Inks Summary down")).toBeDisabled();
+  });
+
+  it("disables move up when first", () => {
+    render(
+      <DraggableWidget {...defaultProps} isFirst={true} isLast={false}>
+        <div>Content</div>
+      </DraggableWidget>
+    );
+    expect(screen.getByLabelText("Move Inks Summary up")).toBeDisabled();
+    expect(screen.getByLabelText("Move Inks Summary down")).toBeEnabled();
+  });
+
+  it("disables move down when last", () => {
+    render(
+      <DraggableWidget {...defaultProps} isFirst={false} isLast={true}>
+        <div>Content</div>
+      </DraggableWidget>
+    );
+    expect(screen.getByLabelText("Move Inks Summary up")).toBeEnabled();
+    expect(screen.getByLabelText("Move Inks Summary down")).toBeDisabled();
+  });
+
+  it("calls onMoveUp with index when up is clicked", () => {
+    const onMoveUp = jest.fn();
+    render(
+      <DraggableWidget {...defaultProps} index={1} isFirst={false} onMoveUp={onMoveUp}>
+        <div>Content</div>
+      </DraggableWidget>
+    );
+    fireEvent.click(screen.getByLabelText("Move Inks Summary up"));
+    expect(onMoveUp).toHaveBeenCalledWith(1);
+  });
+
+  it("calls onMoveDown with index when down is clicked", () => {
+    const onMoveDown = jest.fn();
+    render(
+      <DraggableWidget {...defaultProps} index={2} isFirst={false} onMoveDown={onMoveDown}>
+        <div>Content</div>
+      </DraggableWidget>
+    );
+    fireEvent.click(screen.getByLabelText("Move Inks Summary down"));
+    expect(onMoveDown).toHaveBeenCalledWith(2);
   });
 });
 
