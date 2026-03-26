@@ -45,6 +45,26 @@ export const Dashboard = () => {
     [visibleWidgetIds, setVisibleWidgetIds]
   );
 
+  const handleMoveUp = useCallback(
+    (index) => {
+      if (index <= 0) return;
+      const next = [...visibleWidgetIds];
+      [next[index - 1], next[index]] = [next[index], next[index - 1]];
+      setVisibleWidgetIds(next);
+    },
+    [visibleWidgetIds, setVisibleWidgetIds]
+  );
+
+  const handleMoveDown = useCallback(
+    (index) => {
+      if (index >= visibleWidgetIds.length - 1) return;
+      const next = [...visibleWidgetIds];
+      [next[index], next[index + 1]] = [next[index + 1], next[index]];
+      setVisibleWidgetIds(next);
+    },
+    [visibleWidgetIds, setVisibleWidgetIds]
+  );
+
   const handleReset = useCallback(() => {
     setVisibleWidgetIds(null);
   }, [setVisibleWidgetIds]);
@@ -80,9 +100,13 @@ export const Dashboard = () => {
               key={id}
               id={id}
               index={index}
+              isFirst={index === 0}
+              isLast={index === visibleWidgetIds.length - 1}
               configuring={configuring}
               dragging={dragging}
               onRemove={handleRemove}
+              onMoveUp={handleMoveUp}
+              onMoveDown={handleMoveDown}
               onDragStart={onDragStart}
               onDragOver={onDragOver}
               onDrop={onDrop}
