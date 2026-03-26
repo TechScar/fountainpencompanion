@@ -48,9 +48,8 @@ class AccountsController < ApplicationController
 
   def accounts_params
     raw = (params["_jsonapi"] || params).require(:user)
-    permitted = raw.permit(:name, :blurb, :time_zone)
-
     raw_prefs = raw[:preferences]
+    permitted = raw.except(:preferences).permit(:name, :blurb, :time_zone)
     if raw_prefs.present?
       merged = current_user.preferences.dup
       raw_prefs.each do |key, value|
