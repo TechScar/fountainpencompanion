@@ -8,17 +8,39 @@ const API_KEY = "dashboard_widgets";
 const ALL_IDS = WIDGET_REGISTRY.map((w) => w.id);
 
 function sanitize(saved) {
-  if (!Array.isArray(saved)) return null;
+  if (!saved || typeof saved !== "object" || Array.isArray(saved)) return null;
+
   const validIds = new Set(ALL_IDS);
   const seen = new Set();
-  const result = [];
-  for (const id of saved) {
+  const visible = [];
+  for (const id of saved.visible || []) {
     if (typeof id === "string" && validIds.has(id) && !seen.has(id)) {
-      result.push(id);
+      visible.push(id);
       seen.add(id);
     }
   }
-  return result.length > 0 ? result : null;
+
+  const removedSet = new Set();
+  for (const id of saved.removed || []) {
+    if (typeof id === "string" && validIds.has(id) && !seen.has(id)) {
+      removedSet.add(id);
+    }
+  }
+
+  // Append new widgets (in registry but not in visible or removed)
+  for (const id of ALL_IDS) {
+    if (!seen.has(id) && !removedSet.has(id)) {
+      visible.push(id);
+    }
+  }
+
+  return visible.length > 0 || removedSet.size > 0 ? { visible, removed: [...removedSet] } : null;
+}
+
+function toStorageFormat(visibleIds) {
+  const visibleSet = new Set(visibleIds);
+  const removed = ALL_IDS.filter((id) => !visibleSet.has(id));
+  return { visible: visibleIds, removed };
 }
 
 function readFromStorage() {
@@ -32,7 +54,10 @@ function readFromStorage() {
 }
 
 export function useDashboardPreferences() {
-  const [visibleWidgetIds, setVisibleWidgetIdsState] = useState(() => readFromStorage() || ALL_IDS);
+  const [state, setState] = useState(() => {
+    const saved = readFromStorage();
+    return saved || { visible: ALL_IDS, removed: [] };
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -48,7 +73,7 @@ export function useDashboardPreferences() {
 
         if (serverValue) {
           storage.setItem(STORAGE_KEY, JSON.stringify(serverValue));
-          if (!cancelled) setVisibleWidgetIdsState(serverValue);
+          if (!cancelled) setState(serverValue);
         } else {
           const local = readFromStorage();
           if (local) {
@@ -67,27 +92,29 @@ export function useDashboardPreferences() {
   }, []);
 
   const setVisibleWidgetIds = useCallback((nextOrUpdater, { skipServer = false } = {}) => {
-    setVisibleWidgetIdsState((prev) => {
-      const next = typeof nextOrUpdater === "function" ? nextOrUpdater(prev) : nextOrUpdater;
+    setState((prev) => {
+      const next =
+        typeof nextOrUpdater === "function" ? nextOrUpdater(prev.visible) : nextOrUpdater;
       if (next === null) {
         storage.removeItem(STORAGE_KEY);
         savePreference(null);
-        return ALL_IDS;
+        return { visible: ALL_IDS, removed: [] };
       }
-      storage.setItem(STORAGE_KEY, JSON.stringify(next));
-      if (!skipServer) savePreference(next);
-      return next;
+      const value = toStorageFormat(next);
+      storage.setItem(STORAGE_KEY, JSON.stringify(value));
+      if (!skipServer) savePreference(value);
+      return value;
     });
   }, []);
 
   const saveToServer = useCallback(() => {
-    setVisibleWidgetIdsState((current) => {
+    setState((current) => {
       savePreference(current);
       return current;
     });
   }, []);
 
-  return { visibleWidgetIds, setVisibleWidgetIds, saveToServer };
+  return { visibleWidgetIds: state.visible, setVisibleWidgetIds, saveToServer };
 }
 
 async function savePreference(value) {

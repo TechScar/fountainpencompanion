@@ -29,6 +29,10 @@ afterEach(() => {
 });
 afterAll(() => server.close());
 
+function saveToStorage(value) {
+  storage.setItem("fpc-dashboard-widgets", JSON.stringify(value));
+}
+
 describe("useDashboardPreferences", () => {
   it("returns all widget IDs by default", () => {
     const { result } = renderHook(() => useDashboardPreferences());
@@ -37,23 +41,23 @@ describe("useDashboardPreferences", () => {
   });
 
   it("reads from localStorage on mount", () => {
-    const saved = ["pens_summary", "inks_summary"];
-    storage.setItem("fpc-dashboard-widgets", JSON.stringify(saved));
+    saveToStorage({ visible: ["pens_summary", "inks_summary"], removed: [] });
 
     const { result } = renderHook(() => useDashboardPreferences());
-    expect(result.current.visibleWidgetIds).toEqual(["pens_summary", "inks_summary"]);
+    // visible includes the saved ones plus new widgets not in removed
+    expect(result.current.visibleWidgetIds[0]).toBe("pens_summary");
+    expect(result.current.visibleWidgetIds[1]).toBe("inks_summary");
   });
 
   it("strips invalid IDs from saved preference", () => {
-    const saved = ["nonexistent_widget", "inks_summary"];
-    storage.setItem("fpc-dashboard-widgets", JSON.stringify(saved));
+    saveToStorage({ visible: ["nonexistent_widget", "inks_summary"], removed: [] });
 
     const { result } = renderHook(() => useDashboardPreferences());
-    expect(result.current.visibleWidgetIds).toEqual(["inks_summary"]);
+    expect(result.current.visibleWidgetIds[0]).toBe("inks_summary");
   });
 
   it("falls back to defaults if saved value is empty after sanitizing", () => {
-    storage.setItem("fpc-dashboard-widgets", JSON.stringify(["nonexistent"]));
+    saveToStorage({ visible: ["nonexistent"], removed: [] });
 
     const { result } = renderHook(() => useDashboardPreferences());
     expect(result.current.visibleWidgetIds).toHaveLength(8);
@@ -68,11 +72,16 @@ describe("useDashboardPreferences", () => {
     });
 
     expect(result.current.visibleWidgetIds).toEqual(newIds);
-    expect(JSON.parse(storage.getItem("fpc-dashboard-widgets"))).toEqual(newIds);
+    const stored = JSON.parse(storage.getItem("fpc-dashboard-widgets"));
+    expect(stored.visible).toEqual(newIds);
+    expect(stored.removed).toContain("currently_inked_summary");
   });
 
   it("resets to defaults and clears storage when saving null", () => {
-    storage.setItem("fpc-dashboard-widgets", JSON.stringify(["pens_summary"]));
+    saveToStorage({
+      visible: ["pens_summary"],
+      removed: ["inks_summary"]
+    });
 
     const { result } = renderHook(() => useDashboardPreferences());
 
@@ -86,14 +95,17 @@ describe("useDashboardPreferences", () => {
   });
 
   it("syncs from server when server has a value", async () => {
-    const serverIds = ["leaderboard_ranking", "inks_summary"];
+    const serverValue = {
+      visible: ["leaderboard_ranking", "inks_summary"],
+      removed: ["pens_summary"]
+    };
     server.use(
       rest.get("/account", (req, res, ctx) => {
         return res(
           ctx.json({
             data: {
               attributes: {
-                preferences: { dashboard_widgets: serverIds }
+                preferences: { dashboard_widgets: serverValue }
               }
             }
           })
@@ -108,6 +120,56 @@ describe("useDashboardPreferences", () => {
       rerender();
     });
 
-    expect(result.current.visibleWidgetIds).toEqual(serverIds);
+    expect(result.current.visibleWidgetIds[0]).toBe("leaderboard_ranking");
+    expect(result.current.visibleWidgetIds[1]).toBe("inks_summary");
+    expect(result.current.visibleWidgetIds).not.toContain("pens_summary");
+  });
+
+  it("auto-appends new widgets not in visible or removed", () => {
+    // Simulate a saved preference that doesn't include all current registry widgets.
+    // "currently_inked_summary" is not in visible or removed, so it should be auto-appended.
+    saveToStorage({
+      visible: ["inks_summary", "pens_summary"],
+      removed: ["leaderboard_ranking"]
+    });
+
+    const { result } = renderHook(() => useDashboardPreferences());
+
+    expect(result.current.visibleWidgetIds).toContain("inks_summary");
+    expect(result.current.visibleWidgetIds).toContain("pens_summary");
+    expect(result.current.visibleWidgetIds).toContain("currently_inked_summary");
+    expect(result.current.visibleWidgetIds).not.toContain("leaderboard_ranking");
+    // New widgets appended after the explicitly visible ones
+    expect(result.current.visibleWidgetIds.indexOf("inks_summary")).toBeLessThan(
+      result.current.visibleWidgetIds.indexOf("currently_inked_summary")
+    );
+  });
+
+  it("keeps explicitly removed widgets hidden even when new widgets are added", () => {
+    saveToStorage({
+      visible: ["inks_summary"],
+      removed: ["pens_summary", "leaderboard_ranking"]
+    });
+
+    const { result } = renderHook(() => useDashboardPreferences());
+
+    expect(result.current.visibleWidgetIds).toContain("inks_summary");
+    expect(result.current.visibleWidgetIds).not.toContain("pens_summary");
+    expect(result.current.visibleWidgetIds).not.toContain("leaderboard_ranking");
+  });
+
+  it("tracks removed widgets when setting visible IDs", () => {
+    const { result } = renderHook(() => useDashboardPreferences());
+
+    act(() => {
+      result.current.setVisibleWidgetIds(["inks_summary", "pens_summary"]);
+    });
+
+    const stored = JSON.parse(storage.getItem("fpc-dashboard-widgets"));
+    expect(stored.visible).toEqual(["inks_summary", "pens_summary"]);
+    expect(stored.removed).toContain("currently_inked_summary");
+    expect(stored.removed).toContain("leaderboard_ranking");
+    expect(stored.removed).not.toContain("inks_summary");
+    expect(stored.removed).not.toContain("pens_summary");
   });
 });
