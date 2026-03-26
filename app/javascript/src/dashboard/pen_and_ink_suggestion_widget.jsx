@@ -78,27 +78,41 @@ const AskForSuggestion = ({
   const onClick = async () => {
     setLoading(true);
     setSuggestion(null);
-    let url = `/dashboard/widgets/pen_and_ink_suggestion.json?extra_user_input=${encodeURIComponent(extraInstructions)}`;
-    if (allSuggestions.length > 0) {
-      const hiddenInputData = allSuggestions.map((s) => ({ ink_id: s.ink?.id, pen_id: s.pen?.id }));
-      const hiddenInput = `The following suggestions were rejected. Do not recommend them again:\n${JSON.stringify(hiddenInputData)}`;
-      url += `&hidden_input=${encodeURIComponent(hiddenInput)}`;
-    }
-    const response = await getRequest(url);
-    const json = await response.json();
-    const suggestion_id = json.suggestion_id;
-    const intervalID = setInterval(async () => {
-      const response = await getRequest(
-        `/dashboard/widgets/pen_and_ink_suggestion.json?suggestion_id=${suggestion_id}`
-      );
-      const json = await response.json();
-      if (json.message) {
-        setSuggestion(json);
-        setAllSuggestions([...allSuggestions, json]);
-        setLoading(false);
-        clearInterval(intervalID);
+    try {
+      let url = `/dashboard/widgets/pen_and_ink_suggestion.json?extra_user_input=${encodeURIComponent(extraInstructions)}`;
+      if (allSuggestions.length > 0) {
+        const hiddenInputData = allSuggestions.map((s) => ({
+          ink_id: s.ink?.id,
+          pen_id: s.pen?.id
+        }));
+        const hiddenInput = `The following suggestions were rejected. Do not recommend them again:\n${JSON.stringify(hiddenInputData)}`;
+        url += `&hidden_input=${encodeURIComponent(hiddenInput)}`;
       }
-    }, 1000);
+      const response = await getRequest(url);
+      const json = await response.json();
+      const suggestion_id = json.suggestion_id;
+      const intervalID = setInterval(async () => {
+        try {
+          const response = await getRequest(
+            `/dashboard/widgets/pen_and_ink_suggestion.json?suggestion_id=${suggestion_id}`
+          );
+          const json = await response.json();
+          if (json.message) {
+            setSuggestion(json);
+            setAllSuggestions([...allSuggestions, json]);
+            setLoading(false);
+            clearInterval(intervalID);
+          }
+        } catch (error) {
+          console.error("Failed to poll suggestion:", error);
+          setLoading(false);
+          clearInterval(intervalID);
+        }
+      }, 1000);
+    } catch (error) {
+      console.error("Failed to fetch suggestion:", error);
+      setLoading(false);
+    }
   };
 
   return (
