@@ -17,7 +17,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 });
 
-const Dashboard = () => {
+export const Dashboard = () => {
   const { visibleWidgetIds, setVisibleWidgetIds, saveToServer } = useDashboardPreferences();
   const [configuring, setConfiguring] = useState(false);
   const { dragging, onDragStart, onDragOver, onDrop, onDragEnd } = useDragReorder(
