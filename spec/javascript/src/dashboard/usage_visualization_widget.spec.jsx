@@ -63,7 +63,7 @@ describe("UsageVisualizationWidget", () => {
   it("renders a canvas when data is present", async () => {
     render(<UsageVisualizationWidget renderWhenInvisible />);
     // Wait for data to load by finding the range picker first
-    await screen.findByDisplayValue("1 month");
+    await screen.findByDisplayValue("1 year");
     const canvas = document.querySelector(".fpc-usage-visualization__canvas");
     expect(canvas).toBeTruthy();
     expect(canvas.tagName).toBe("CANVAS");
@@ -71,7 +71,7 @@ describe("UsageVisualizationWidget", () => {
 
   it("renders range picker select", async () => {
     render(<UsageVisualizationWidget renderWhenInvisible />);
-    const select = await screen.findByDisplayValue("1 month");
+    const select = await screen.findByDisplayValue("1 year");
     expect(select.tagName).toBe("SELECT");
     expect(select.options.length).toBe(5);
   });
