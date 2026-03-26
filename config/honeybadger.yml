@@ -39,6 +39,8 @@ exceptions:
     - RedisClient::ConnectionError
     - RedisClient::CannotConnectError
     - RedisClient::ReadTimeoutError
+sidekiq:
+  attempt_threshold: 3
 rails:
   subscriber_ignore_sources:
     - !ruby/regexp "/redis/"
