@@ -142,9 +142,12 @@ export const UsageVisualizationWidget = ({ renderWhenInvisible }) => {
 
 // No time limit — animation runs until component unmounts
 const GRID_SIZE = 140;
+const FILL_RATIO = 1.0;
+const EMPTY = null;
 
 function buildGrid(entries, cols, rows) {
   const totalPixels = cols * rows;
+  const filledPixels = Math.round(totalPixels * FILL_RATIO);
   const totalCount = entries.reduce((sum, e) => sum + e.count, 0);
   if (totalCount === 0) return { grid: [], inkNames: [] };
 
@@ -156,13 +159,19 @@ function buildGrid(entries, cols, rows) {
     const entry = entries[i];
     const isLast = i === entries.length - 1;
     const count = isLast
-      ? totalPixels - assigned
-      : Math.round((entry.count / totalCount) * totalPixels);
+      ? filledPixels - assigned
+      : Math.round((entry.count / totalCount) * filledPixels);
     for (let j = 0; j < count; j++) {
       pixels.push(entry.color);
       inkNames.push(entry.ink_name);
     }
     assigned += count;
+  }
+
+  // Fill remainder with empty pixels
+  while (pixels.length < totalPixels) {
+    pixels.push(null);
+    inkNames.push(null);
   }
 
   // Fisher-Yates shuffle
@@ -229,6 +238,7 @@ function computeCenters(grid, cols, colorDistances) {
   const byColor = {};
   for (let i = 0; i < grid.length; i++) {
     const color = grid[i];
+    if (color === EMPTY) continue;
     if (!byColor[color]) byColor[color] = { rs: [], cs: [] };
     byColor[color].rs.push(Math.floor(i / cols));
     byColor[color].cs.push(i % cols);
@@ -301,7 +311,7 @@ const SPEED_OPTIONS = [
 function simulationTick(grid, inkNames, cols, rows, rawCenters, blendedCenters, multiplier) {
   const totalPixels = grid.length;
   const targetSwaps = Math.floor(totalPixels * 0.005 * multiplier);
-  const maxAttempts = totalPixels * multiplier * 3;
+  const maxAttempts = totalPixels * multiplier * 6;
   const dirty = new Set();
   let attempts = 0;
   let successes = 0;
@@ -311,74 +321,71 @@ function simulationTick(grid, inkNames, cols, rows, rawCenters, blendedCenters, 
     const a = Math.floor(Math.random() * totalPixels);
 
     const colorA = grid[a];
+    if (colorA === EMPTY) continue; // Empty pixels don't initiate swaps
     const blendedA = blendedCenters[colorA];
     const rawA = rawCenters[colorA];
     const rowA = Math.floor(a / cols);
     const colA = a % cols;
 
-    // Swap partner: biased toward blended center (drift toward similar colors)
-    let dirR = blendedA.r - rowA;
-    let dirC = blendedA.c - colA;
-    if (dirR > rows / 2) dirR -= rows;
-    else if (dirR < -rows / 2) dirR += rows;
-    if (dirC > cols / 2) dirC -= cols;
-    else if (dirC < -cols / 2) dirC += cols;
-    const dist = Math.sqrt(dirR * dirR + dirC * dirC) || 1;
-    const stepSize = dist * (0.3 + Math.random() * 0.7);
-    const nr =
-      ((Math.round(rowA + (dirR / dist) * stepSize + (Math.random() - 0.5) * 2) % rows) + rows) %
-      rows;
-    const nc =
-      ((Math.round(colA + (dirC / dist) * stepSize + (Math.random() - 0.5) * 2) % cols) + cols) %
-      cols;
-    const b = nr * cols + nc;
+    // Random swap partner within local radius — prevents teleporting noise
+    const SWAP_RADIUS = 15;
+    const offsetR = Math.floor(Math.random() * (SWAP_RADIUS * 2 + 1)) - SWAP_RADIUS;
+    const offsetC = Math.floor(Math.random() * (SWAP_RADIUS * 2 + 1)) - SWAP_RADIUS;
+    const bRow = (((rowA + offsetR) % rows) + rows) % rows;
+    const bCol = (((colA + offsetC) % cols) + cols) % cols;
+    const b = bRow * cols + bCol;
 
     if (a === b || grid[a] === grid[b]) continue;
 
     const colorB = grid[b];
-    const rawB = rawCenters[colorB];
-    const blendedB = blendedCenters[colorB];
+    const isEmptyB = colorB === EMPTY;
     const rowB = Math.floor(b / cols);
     const colB = b % cols;
 
     const happyA = countSameNeighbors(grid, a, cols, rows);
-    const happyB = countSameNeighbors(grid, b, cols, rows);
+    const happyB = isEmptyB ? 0 : countSameNeighbors(grid, b, cols, rows);
 
     // Compactness: does swap move pixels closer to their own raw center?
     const compactA =
       toroidalDist(rowA, colA, rawA.r, rawA.c, rows, cols) -
-      toroidalDist(nr, nc, rawA.r, rawA.c, rows, cols);
-    const compactB =
-      toroidalDist(rowB, colB, rawB.r, rawB.c, rows, cols) -
-      toroidalDist(rowA, colA, rawB.r, rawB.c, rows, cols);
+      toroidalDist(rowB, colB, rawA.r, rawA.c, rows, cols);
+    let compactB = 0;
+    let driftB = 0;
+    if (!isEmptyB) {
+      const rawB = rawCenters[colorB];
+      const blendedB = blendedCenters[colorB];
+      compactB =
+        toroidalDist(rowB, colB, rawB.r, rawB.c, rows, cols) -
+        toroidalDist(rowA, colA, rawB.r, rawB.c, rows, cols);
+      driftB =
+        toroidalDist(rowB, colB, blendedB.r, blendedB.c, rows, cols) -
+        toroidalDist(rowA, colA, blendedB.r, blendedB.c, rows, cols);
+    }
 
     // Drift: does swap move pixels closer to their blended center?
     const driftA =
       toroidalDist(rowA, colA, blendedA.r, blendedA.c, rows, cols) -
-      toroidalDist(nr, nc, blendedA.r, blendedA.c, rows, cols);
-    const driftB =
-      toroidalDist(rowB, colB, blendedB.r, blendedB.c, rows, cols) -
-      toroidalDist(rowA, colA, blendedB.r, blendedB.c, rows, cols);
+      toroidalDist(rowB, colB, blendedA.r, blendedA.c, rows, cols);
 
-    const centerPull = (compactA + compactB) * 1.0 + (driftA + driftB) * 1.0;
+    const centerPull = (compactA + compactB) * 0.5 + (driftA + driftB) * 3.0;
 
     [grid[a], grid[b]] = [grid[b], grid[a]];
     [inkNames[a], inkNames[b]] = [inkNames[b], inkNames[a]];
 
-    const newHappyA = countSameNeighbors(grid, a, cols, rows);
+    const newHappyA = isEmptyB ? 0 : countSameNeighbors(grid, a, cols, rows);
     const newHappyB = countSameNeighbors(grid, b, cols, rows);
 
-    const localImprovement = newHappyA + newHappyB - happyA - happyB;
-    // Combined score: local happiness + center pull
+    const localImprovement = (newHappyA + newHappyB - happyA - happyB) * 0.8;
+    // Combined score: local happiness + strong drift
     const score = localImprovement + centerPull;
 
     let doSwap;
     if (score > 0) {
       doSwap = true;
     } else if (score > -0.5) {
-      doSwap = Math.random() < 0.03;
+      doSwap = Math.random() < 0.005;
     } else {
-      doSwap = Math.random() < 0.001;
+      doSwap = false;
     }
 
     if (doSwap) {
@@ -394,21 +401,29 @@ function simulationTick(grid, inkNames, cols, rows, rawCenters, blendedCenters, 
   return dirty;
 }
 
-function drawGrid(ctx, grid, cols, pixelSize) {
-  for (let i = 0; i < grid.length; i++) {
-    const row = Math.floor(i / cols);
-    const col = i % cols;
+function drawPixel(ctx, grid, i, cols, pixelSize) {
+  const row = Math.floor(i / cols);
+  const col = i % cols;
+  const x = col * pixelSize;
+  const y = row * pixelSize;
+  if (grid[i] === EMPTY) {
+    ctx.clearRect(x, y, pixelSize, pixelSize);
+  } else {
     ctx.fillStyle = grid[i];
-    ctx.fillRect(col * pixelSize, row * pixelSize, pixelSize, pixelSize);
+    ctx.fillRect(x, y, pixelSize, pixelSize);
+  }
+}
+
+function drawGrid(ctx, grid, cols, pixelSize) {
+  ctx.clearRect(0, 0, cols * pixelSize, (grid.length / cols) * pixelSize);
+  for (let i = 0; i < grid.length; i++) {
+    if (grid[i] !== EMPTY) drawPixel(ctx, grid, i, cols, pixelSize);
   }
 }
 
 function drawDirty(ctx, grid, dirty, cols, pixelSize) {
   for (const i of dirty) {
-    const row = Math.floor(i / cols);
-    const col = i % cols;
-    ctx.fillStyle = grid[i];
-    ctx.fillRect(col * pixelSize, row * pixelSize, pixelSize, pixelSize);
+    drawPixel(ctx, grid, i, cols, pixelSize);
   }
 }
 

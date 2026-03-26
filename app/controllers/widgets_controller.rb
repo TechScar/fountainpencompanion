@@ -161,6 +161,7 @@ class WidgetsController < ApplicationController
     rows =
       scope
         .joins(currently_inked: :collected_ink)
+        .where("#{COLOR_EXPRESSION} IS NOT NULL")
         .group(
           "collected_inks.id",
           "collected_inks.brand_name",
@@ -185,6 +186,7 @@ class WidgetsController < ApplicationController
         .currently_inkeds
         .active
         .joins(:collected_ink)
+        .where("#{COLOR_EXPRESSION} IS NOT NULL")
         .group(
           "collected_inks.id",
           "collected_inks.brand_name",
