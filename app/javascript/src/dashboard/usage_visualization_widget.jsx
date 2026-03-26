@@ -178,7 +178,7 @@ function colorDistance(hexA, hexB) {
   return Math.sqrt(dh * dh + ds * ds + dv * dv);
 }
 
-const SIMILARITY_BLEND = 0.9; // How much similar colors pull toward each other
+const SIMILARITY_BLEND = 1.5; // How much similar colors pull toward each other
 
 function circularMean(angles, period) {
   let sinSum = 0;
@@ -318,7 +318,7 @@ function simulationTick(grid, inkNames, cols, rows, rawCenters, blendedCenters, 
       toroidalDist(rowB, colB, blendedB.r, blendedB.c, rows, cols) -
       toroidalDist(rowA, colA, blendedB.r, blendedB.c, rows, cols);
 
-    const centerPull = (compactA + compactB) * 0.5 + (driftA + driftB) * 3.0;
+    const centerPull = (compactA + compactB) * 0.5 + (driftA + driftB) * 4.5;
 
     [grid[a], grid[b]] = [grid[b], grid[a]];
     [inkNames[a], inkNames[b]] = [inkNames[b], inkNames[a]];
