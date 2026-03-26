@@ -157,6 +157,24 @@ describe AccountsController do
           expect(user.reload.preferences).to eq({})
         end
 
+        it "updates dashboard_widgets preference" do
+          widgets = %w[inks_summary pens_summary]
+          put "/account",
+              params: { user: { preferences: { dashboard_widgets: widgets } } }.to_json,
+              headers: jsonapi_headers
+          expect(response).to be_successful
+          expect(user.reload.preferences["dashboard_widgets"]).to eq(widgets)
+        end
+
+        it "removes dashboard_widgets when set to null" do
+          user.update!(preferences: { "dashboard_widgets" => %w[inks_summary pens_summary] })
+          put "/account",
+              params: { user: { preferences: { dashboard_widgets: nil } } }.to_json,
+              headers: jsonapi_headers
+          expect(response).to be_successful
+          expect(user.reload.preferences).to eq({})
+        end
+
         it "returns updated user in jsonapi response" do
           put "/account",
               params: {
