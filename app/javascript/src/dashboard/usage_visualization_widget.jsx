@@ -352,21 +352,33 @@ function simulationTick(grid, inkNames, cols, rows, rawCenters, blendedCenters, 
   return dirty;
 }
 
-function drawGrid(ctx, grid, cols, pixelSize) {
+function cellRect(col, row, cols, rows, canvasW, canvasH) {
+  const x = Math.floor((col * canvasW) / cols);
+  const y = Math.floor((row * canvasH) / rows);
+  const w = Math.floor(((col + 1) * canvasW) / cols) - x;
+  const h = Math.floor(((row + 1) * canvasH) / rows) - y;
+  return { x, y, w, h };
+}
+
+function drawGrid(ctx, grid, cols, canvasW, canvasH) {
+  const rows = grid.length / cols;
   for (let i = 0; i < grid.length; i++) {
     const row = Math.floor(i / cols);
     const col = i % cols;
+    const { x, y, w, h } = cellRect(col, row, cols, rows, canvasW, canvasH);
     ctx.fillStyle = grid[i];
-    ctx.fillRect(col * pixelSize, row * pixelSize, pixelSize, pixelSize);
+    ctx.fillRect(x, y, w, h);
   }
 }
 
-function drawDirty(ctx, grid, dirty, cols, pixelSize) {
+function drawDirty(ctx, grid, dirty, cols, canvasW, canvasH) {
+  const rows = grid.length / cols;
   for (const i of dirty) {
     const row = Math.floor(i / cols);
     const col = i % cols;
+    const { x, y, w, h } = cellRect(col, row, cols, rows, canvasW, canvasH);
     ctx.fillStyle = grid[i];
-    ctx.fillRect(col * pixelSize, row * pixelSize, pixelSize, pixelSize);
+    ctx.fillRect(x, y, w, h);
   }
 }
 
@@ -428,7 +440,6 @@ const UsageVisualizationWidgetContent = ({ range, setRange, speed, setSpeed }) =
     const cols = GRID_SIZE;
     const rows = GRID_SIZE;
     const totalPixels = cols * rows;
-    const pixelSize = width / cols;
     const canvasSize = Math.floor(width);
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -443,7 +454,7 @@ const UsageVisualizationWidgetContent = ({ range, setRange, speed, setSpeed }) =
     gridRef.current = grid;
     inkNamesRef.current = inkNames;
 
-    drawGrid(ctx, grid, cols, pixelSize);
+    drawGrid(ctx, grid, cols, canvasSize, canvasSize);
 
     let lastFrame = performance.now();
     let autoStopped = false;
@@ -472,7 +483,7 @@ const UsageVisualizationWidgetContent = ({ range, setRange, speed, setSpeed }) =
           currentSpeed ? currentSpeed.multiplier : 3
         );
         if (dirty.size > 0) {
-          drawDirty(ctx, grid, dirty, cols, pixelSize);
+          drawDirty(ctx, grid, dirty, cols, canvasSize, canvasSize);
         }
         // Auto-stop once when converged
         if (!autoStopped && dirty.size < totalPixels * 0.005) {
@@ -500,24 +511,22 @@ const UsageVisualizationWidgetContent = ({ range, setRange, speed, setSpeed }) =
     };
   }, [entries, width, hasEntries, restartKey]);
 
-  const handleMouseMove = useCallback(
-    (e) => {
-      const canvas = canvasRef.current;
-      const inkNames = inkNamesRef.current;
-      if (!canvas || !inkNames) return;
+  const handleMouseMove = useCallback((e) => {
+    const canvas = canvasRef.current;
+    const inkNames = inkNamesRef.current;
+    if (!canvas || !inkNames) return;
 
-      const rect = canvas.getBoundingClientRect();
-      const pixelSize = (width || 300) / GRID_SIZE;
-      const col = Math.floor((e.clientX - rect.left) / pixelSize);
-      const row = Math.floor((e.clientY - rect.top) / pixelSize);
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    const col = Math.floor((mouseX * GRID_SIZE) / rect.width);
+    const row = Math.floor((mouseY * GRID_SIZE) / rect.height);
 
-      if (col >= 0 && col < GRID_SIZE && row >= 0 && row < GRID_SIZE) {
-        const idx = row * GRID_SIZE + col;
-        canvas.title = inkNames[idx] || "";
-      }
-    },
-    [width]
-  );
+    if (col >= 0 && col < GRID_SIZE && row >= 0 && row < GRID_SIZE) {
+      const idx = row * GRID_SIZE + col;
+      canvas.title = inkNames[idx] || "";
+    }
+  }, []);
 
   return (
     <>
