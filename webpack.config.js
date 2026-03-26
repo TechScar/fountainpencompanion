@@ -12,6 +12,7 @@ const mode = process.env.NODE_ENV === "development" ? "development" : "productio
  */
 module.exports = {
   mode,
+  devtool: "source-map",
   entry: {
     application: "./app/javascript/application.js",
     admin: "./app/javascript/admin.js"
