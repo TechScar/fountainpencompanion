@@ -1,7 +1,7 @@
 import React, { useCallback, useContext, useEffect, useRef, useState } from "react";
+import convert from "color-convert";
 import { Widget, WidgetDataContext, WidgetWidthContext } from "./widgets";
 import { getRequest, putRequest } from "../fetch";
-import { colorSort } from "../color-sorting";
 import * as storage from "../localStorage";
 
 const STORAGE_KEY = "fpc-usage-viz-range";
@@ -175,7 +175,13 @@ function buildGrid(entries, cols, rows) {
   return { grid: pixels, inkNames };
 }
 
-const NEIGHBOR_RADIUS = 1;
+function toroidalDist(r1, c1, r2, c2, rows, cols) {
+  let dr = Math.abs(r1 - r2);
+  let dc = Math.abs(c1 - c2);
+  if (dr > rows / 2) dr = rows - dr;
+  if (dc > cols / 2) dc = cols - dc;
+  return Math.sqrt(dr * dr + dc * dc);
+}
 
 function countSameNeighbors(grid, idx, cols, rows) {
   const color = grid[idx];
@@ -183,74 +189,107 @@ function countSameNeighbors(grid, idx, cols, rows) {
   const col = idx % cols;
   let count = 0;
 
-  for (let dr = -NEIGHBOR_RADIUS; dr <= NEIGHBOR_RADIUS; dr++) {
-    for (let dc = -NEIGHBOR_RADIUS; dc <= NEIGHBOR_RADIUS; dc++) {
+  for (let dr = -1; dr <= 1; dr++) {
+    for (let dc = -1; dc <= 1; dc++) {
       if (dr === 0 && dc === 0) continue;
-      const nr = row + dr;
-      const nc = col + dc;
-      if (nr >= 0 && nr < rows && nc >= 0 && nc < cols) {
-        if (grid[nr * cols + nc] === color) count++;
-      }
+      const nr = (row + dr + rows) % rows;
+      const nc = (col + dc + cols) % cols;
+      if (grid[nr * cols + nc] === color) count++;
     }
   }
   return count;
 }
 
-// Different snake traversal patterns for variety
-const SNAKE_PATTERNS = [
-  // Left-to-right, top-to-bottom
-  (idx, cols) => {
-    const row = Math.floor(idx / cols);
-    const col = row % 2 === 0 ? idx % cols : cols - 1 - (idx % cols);
-    return { r: row, c: col };
-  },
-  // Top-to-bottom, left-to-right (vertical snake)
-  (idx, cols, rows) => {
-    const col = Math.floor(idx / rows);
-    const row = col % 2 === 0 ? idx % rows : rows - 1 - (idx % rows);
-    return { r: row, c: col };
-  },
-  // Right-to-left, bottom-to-top (reversed horizontal)
-  (idx, cols, rows) => {
-    const totalPixels = cols * rows;
-    const rev = totalPixels - 1 - idx;
-    const row = Math.floor(rev / cols);
-    const col = row % 2 === 0 ? rev % cols : cols - 1 - (rev % cols);
-    return { r: row, c: col };
-  },
-  // Bottom-to-top, right-to-left (reversed vertical)
-  (idx, cols, rows) => {
-    const totalPixels = cols * rows;
-    const rev = totalPixels - 1 - idx;
-    const col = Math.floor(rev / rows);
-    const row = col % 2 === 0 ? rev % rows : rows - 1 - (rev % rows);
-    return { r: row, c: col };
+function colorDistance(hexA, hexB) {
+  const [h1, s1, v1] = convert.hex.hsv(hexA);
+  const [h2, s2, v2] = convert.hex.hsv(hexB);
+  // Circular hue distance (0-180)
+  const dh = Math.min(Math.abs(h1 - h2), 360 - Math.abs(h1 - h2));
+  const ds = Math.abs(s1 - s2);
+  const dv = Math.abs(v1 - v2);
+  return Math.sqrt(dh * dh + ds * ds + dv * dv);
+}
+
+const SIMILARITY_BLEND = 0.9; // How much similar colors pull toward each other
+
+function circularMean(angles, period) {
+  let sinSum = 0;
+  let cosSum = 0;
+  for (const a of angles) {
+    const theta = (a / period) * 2 * Math.PI;
+    sinSum += Math.sin(theta);
+    cosSum += Math.cos(theta);
   }
-];
+  const theta = Math.atan2(sinSum, cosSum);
+  return ((theta / (2 * Math.PI)) * period + period) % period;
+}
 
-function computeTargets(entries, cols, rows) {
-  const sorted = [...entries].sort((a, b) => colorSort(a.color, b.color));
-  const totalCount = sorted.reduce((sum, e) => sum + e.count, 0);
-  const totalPixels = cols * rows;
-
-  // Pick a random snake pattern
-  const pattern = SNAKE_PATTERNS[Math.floor(Math.random() * SNAKE_PATTERNS.length)];
-  // Random starting offset within the color sort order
-  const colorOffset = Math.floor(Math.random() * sorted.length);
-  const shifted = [...sorted.slice(colorOffset), ...sorted.slice(0, colorOffset)];
-
-  const targets = {};
-  let pixelIndex = 0;
-
-  for (const entry of shifted) {
-    const count = Math.round((entry.count / totalCount) * totalPixels);
-    const midIdx = Math.min(Math.floor(pixelIndex + count / 2), totalPixels - 1);
-    const pos = pattern(midIdx, cols, rows);
-    targets[entry.color] = pos;
-    pixelIndex += count;
+function computeCenters(grid, cols, colorDistances) {
+  const rows = grid.length / cols;
+  const byColor = {};
+  for (let i = 0; i < grid.length; i++) {
+    const color = grid[i];
+    if (!byColor[color]) byColor[color] = { rs: [], cs: [] };
+    byColor[color].rs.push(Math.floor(i / cols));
+    byColor[color].cs.push(i % cols);
   }
 
-  return targets;
+  // Raw centers of mass using circular mean (torus-aware)
+  const rawCenters = {};
+  const colors = Object.keys(byColor);
+  for (const color of colors) {
+    rawCenters[color] = {
+      r: circularMean(byColor[color].rs, rows),
+      c: circularMean(byColor[color].cs, cols)
+    };
+  }
+
+  // Blended centers: pulled toward similar colors
+  const blendedCenters = {};
+  for (const color of colors) {
+    let pullR = 0;
+    let pullC = 0;
+    let totalWeight = 0;
+
+    for (const other of colors) {
+      if (other === color) continue;
+      const dist = colorDistances[color][other];
+      const weight = 1 / (1 + dist / 15);
+      let dr = rawCenters[other].r - rawCenters[color].r;
+      let dc = rawCenters[other].c - rawCenters[color].c;
+      if (dr > rows / 2) dr -= rows;
+      else if (dr < -rows / 2) dr += rows;
+      if (dc > cols / 2) dc -= cols;
+      else if (dc < -cols / 2) dc += cols;
+      pullR += dr * weight;
+      pullC += dc * weight;
+      totalWeight += weight;
+    }
+
+    if (totalWeight > 0) {
+      blendedCenters[color] = {
+        r:
+          (((rawCenters[color].r + (pullR / totalWeight) * SIMILARITY_BLEND) % rows) + rows) % rows,
+        c: (((rawCenters[color].c + (pullC / totalWeight) * SIMILARITY_BLEND) % cols) + cols) % cols
+      };
+    } else {
+      blendedCenters[color] = rawCenters[color];
+    }
+  }
+
+  return { rawCenters, blendedCenters };
+}
+
+function precomputeColorDistances(entries) {
+  const distances = {};
+  for (const a of entries) {
+    distances[a.color] = {};
+    for (const b of entries) {
+      if (a.color === b.color) continue;
+      distances[a.color][b.color] = colorDistance(a.color, b.color);
+    }
+  }
+  return distances;
 }
 
 const SPEED_OPTIONS = [
@@ -259,38 +298,69 @@ const SPEED_OPTIONS = [
   { value: "fast", label: "Fast", fps: 60, multiplier: 6 }
 ];
 
-function simulationTick(grid, inkNames, cols, rows, targets, multiplier) {
+function simulationTick(grid, inkNames, cols, rows, rawCenters, blendedCenters, multiplier) {
   const totalPixels = grid.length;
-  const swapCount = totalPixels * multiplier;
+  const targetSwaps = Math.floor(totalPixels * 0.005 * multiplier);
+  const maxAttempts = totalPixels * multiplier * 3;
   const dirty = new Set();
+  let attempts = 0;
+  let successes = 0;
 
-  for (let s = 0; s < swapCount; s++) {
+  while (successes < targetSwaps && attempts < maxAttempts) {
+    attempts++;
     const a = Math.floor(Math.random() * totalPixels);
 
-    // Pick swap partner: biased toward color's target position
     const colorA = grid[a];
-    const center = targets[colorA];
+    const blendedA = blendedCenters[colorA];
+    const rawA = rawCenters[colorA];
     const rowA = Math.floor(a / cols);
     const colA = a % cols;
-    const dirR = center.r - rowA;
-    const dirC = center.c - colA;
+
+    // Swap partner: biased toward blended center (drift toward similar colors)
+    let dirR = blendedA.r - rowA;
+    let dirC = blendedA.c - colA;
+    if (dirR > rows / 2) dirR -= rows;
+    else if (dirR < -rows / 2) dirR += rows;
+    if (dirC > cols / 2) dirC -= cols;
+    else if (dirC < -cols / 2) dirC += cols;
     const dist = Math.sqrt(dirR * dirR + dirC * dirC) || 1;
     const stepSize = dist * (0.3 + Math.random() * 0.7);
-    const nr = Math.max(
-      0,
-      Math.min(rows - 1, Math.round(rowA + (dirR / dist) * stepSize + (Math.random() - 0.5) * 2))
-    );
-    const nc = Math.max(
-      0,
-      Math.min(cols - 1, Math.round(colA + (dirC / dist) * stepSize + (Math.random() - 0.5) * 2))
-    );
+    const nr =
+      ((Math.round(rowA + (dirR / dist) * stepSize + (Math.random() - 0.5) * 2) % rows) + rows) %
+      rows;
+    const nc =
+      ((Math.round(colA + (dirC / dist) * stepSize + (Math.random() - 0.5) * 2) % cols) + cols) %
+      cols;
     const b = nr * cols + nc;
 
     if (a === b || grid[a] === grid[b]) continue;
 
-    // Use neighbor happiness to decide swap
+    const colorB = grid[b];
+    const rawB = rawCenters[colorB];
+    const blendedB = blendedCenters[colorB];
+    const rowB = Math.floor(b / cols);
+    const colB = b % cols;
+
     const happyA = countSameNeighbors(grid, a, cols, rows);
     const happyB = countSameNeighbors(grid, b, cols, rows);
+
+    // Compactness: does swap move pixels closer to their own raw center?
+    const compactA =
+      toroidalDist(rowA, colA, rawA.r, rawA.c, rows, cols) -
+      toroidalDist(nr, nc, rawA.r, rawA.c, rows, cols);
+    const compactB =
+      toroidalDist(rowB, colB, rawB.r, rawB.c, rows, cols) -
+      toroidalDist(rowA, colA, rawB.r, rawB.c, rows, cols);
+
+    // Drift: does swap move pixels closer to their blended center?
+    const driftA =
+      toroidalDist(rowA, colA, blendedA.r, blendedA.c, rows, cols) -
+      toroidalDist(nr, nc, blendedA.r, blendedA.c, rows, cols);
+    const driftB =
+      toroidalDist(rowB, colB, blendedB.r, blendedB.c, rows, cols) -
+      toroidalDist(rowA, colA, blendedB.r, blendedB.c, rows, cols);
+
+    const centerPull = (compactA + compactB) * 1.0 + (driftA + driftB) * 1.0;
 
     [grid[a], grid[b]] = [grid[b], grid[a]];
     [inkNames[a], inkNames[b]] = [inkNames[b], inkNames[a]];
@@ -298,13 +368,15 @@ function simulationTick(grid, inkNames, cols, rows, targets, multiplier) {
     const newHappyA = countSameNeighbors(grid, a, cols, rows);
     const newHappyB = countSameNeighbors(grid, b, cols, rows);
 
-    const improvement = newHappyA + newHappyB - happyA - happyB;
+    const localImprovement = newHappyA + newHappyB - happyA - happyB;
+    // Combined score: local happiness + center pull
+    const score = localImprovement + centerPull;
 
     let doSwap;
-    if (improvement > 0) {
+    if (score > 0) {
       doSwap = true;
-    } else if (improvement === 0) {
-      doSwap = Math.random() < 0.05;
+    } else if (score > -0.5) {
+      doSwap = Math.random() < 0.03;
     } else {
       doSwap = Math.random() < 0.001;
     }
@@ -312,6 +384,7 @@ function simulationTick(grid, inkNames, cols, rows, targets, multiplier) {
     if (doSwap) {
       dirty.add(a);
       dirty.add(b);
+      successes++;
     } else {
       [grid[a], grid[b]] = [grid[b], grid[a]];
       [inkNames[a], inkNames[b]] = [inkNames[b], inkNames[a]];
@@ -400,7 +473,8 @@ const UsageVisualizationWidgetContent = ({ range, setRange, speed, setSpeed }) =
 
     let lastFrame = performance.now();
     let autoStopped = false;
-    const targets = computeTargets(entries, cols, rows);
+    const colorDistances = precomputeColorDistances(entries);
+    let { rawCenters, blendedCenters } = computeCenters(grid, cols, colorDistances);
 
     function animate(now) {
       const currentSpeed = SPEED_OPTIONS.find((o) => o.value === speedRef.current);
@@ -408,12 +482,14 @@ const UsageVisualizationWidgetContent = ({ range, setRange, speed, setSpeed }) =
 
       if (runningRef.current && visibleRef.current && now - lastFrame >= frameInterval) {
         lastFrame = now;
+        ({ rawCenters, blendedCenters } = computeCenters(grid, cols, colorDistances));
         const dirty = simulationTick(
           grid,
           inkNames,
           cols,
           rows,
-          targets,
+          rawCenters,
+          blendedCenters,
           currentSpeed ? currentSpeed.multiplier : 3
         );
         if (dirty.size > 0) {
