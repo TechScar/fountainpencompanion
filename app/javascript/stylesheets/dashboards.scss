@@ -10,6 +10,9 @@
   display: grid;
   gap: b.$spacer;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  @media (min-width: 1600px) {
+    grid-template-columns: repeat(4, 1fr);
+  }
   grid-template-rows: auto;
 
   // Ensure all widgets in the same row stretch to equal height.
@@ -96,4 +99,16 @@
 .fpc-inks-visualization {
   display: flex;
   flex-direction: column;
+}
+
+.fpc-usage-visualization {
+  &__canvas {
+    display: block;
+  }
+
+  &__empty {
+    text-align: center;
+    color: var(--bs-secondary);
+    padding: 2rem;
+  }
 }

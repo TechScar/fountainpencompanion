@@ -42,13 +42,14 @@ class AccountsController < ApplicationController
     currently_inked_table_hidden_fields
     currently_inked_cards_hidden_fields
     dashboard_widgets
+    usage_visualization_range
+    usage_visualization_speed
   ].freeze
 
   def accounts_params
     raw = (params["_jsonapi"] || params).require(:user)
-    permitted = raw.permit(:name, :blurb, :time_zone)
-
     raw_prefs = raw[:preferences]
+    permitted = raw.except(:preferences).permit(:name, :blurb, :time_zone)
     if raw_prefs.present?
       merged = current_user.preferences.dup
       raw_prefs.each do |key, value|
