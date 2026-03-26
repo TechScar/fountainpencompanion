@@ -15,6 +15,7 @@ html
     meta name="viewport" content="width=device-width, initial-scale=1"
     meta name="honeybadger-api-key" content=ENV['FRONTEND_HONEYBADGER_API_KEY']
     meta name="honeybadger-environment" content=Rails.env
+    meta name="honeybadger-revision" content=ENV['HONEYBADGER_REVISION']
     = render partial: "layouts/clicky"
     = content_for :head
   body

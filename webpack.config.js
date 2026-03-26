@@ -3,6 +3,7 @@ const path = require("path");
 const webpack = require("webpack");
 const MiniCssExtractPlugin = require("mini-css-extract-plugin");
 const RemoveEmptyScriptsPlugin = require("webpack-remove-empty-scripts");
+const HoneybadgerSourceMapPlugin = require("@honeybadger-io/webpack");
 
 const mode = process.env.NODE_ENV === "development" ? "development" : "production";
 
@@ -47,6 +48,15 @@ module.exports = {
     new MiniCssExtractPlugin(),
     new webpack.optimize.LimitChunkCountPlugin({
       maxChunks: 1
-    })
+    }),
+    ...(process.env.HONEYBADGER_API_KEY && process.env.HONEYBADGER_REVISION
+      ? [
+          new HoneybadgerSourceMapPlugin({
+            apiKey: process.env.HONEYBADGER_API_KEY,
+            assetsUrl: process.env.HONEYBADGER_ASSETS_URL,
+            revision: process.env.HONEYBADGER_REVISION
+          })
+        ]
+      : [])
   ]
 };
