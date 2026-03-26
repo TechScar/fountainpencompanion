@@ -61,13 +61,15 @@ function getloggedInUserData(callback) {
 }
 
 function getUserData(callback) {
-  return getRequest(location.href)
-    .then((response) => response.json())
-    .then((json) => callback(processData(json)));
+  return getRequest(location.href).then((response) => {
+    if (response.ok) {
+      response.json().then((json) => callback(processData(json)));
+    }
+  });
 }
 
 function processData(data) {
-  let processedData = data.included
+  let processedData = (data.included || [])
     .filter((e) => e.type == "collected_inks")
     .map((e) => e.attributes);
   return {

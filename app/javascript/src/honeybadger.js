@@ -8,7 +8,8 @@ if (apiKey) {
   Honeybadger.configure({
     apiKey,
     environment: environment || "production",
-    revision
+    revision,
+    enableUncaught: false
   });
 }
 
