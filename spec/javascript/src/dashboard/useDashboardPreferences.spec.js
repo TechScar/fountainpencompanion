@@ -36,7 +36,7 @@ function saveToStorage(value) {
 describe("useDashboardPreferences", () => {
   it("returns all widget IDs by default", () => {
     const { result } = renderHook(() => useDashboardPreferences());
-    expect(result.current.visibleWidgetIds).toHaveLength(8);
+    expect(result.current.visibleWidgetIds).toHaveLength(9);
     expect(result.current.visibleWidgetIds[0]).toBe("currently_inked_summary");
   });
 
@@ -60,7 +60,7 @@ describe("useDashboardPreferences", () => {
     saveToStorage({ visible: ["nonexistent"], removed: [] });
 
     const { result } = renderHook(() => useDashboardPreferences());
-    expect(result.current.visibleWidgetIds).toHaveLength(8);
+    expect(result.current.visibleWidgetIds).toHaveLength(9);
   });
 
   it("updates localStorage and state on save", () => {
@@ -90,7 +90,7 @@ describe("useDashboardPreferences", () => {
     });
 
     expect(storage.getItem("fpc-dashboard-widgets")).toBeNull();
-    expect(result.current.visibleWidgetIds).toHaveLength(8);
+    expect(result.current.visibleWidgetIds).toHaveLength(9);
     expect(result.current.visibleWidgetIds[0]).toBe("currently_inked_summary");
   });
 

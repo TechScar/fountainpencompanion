@@ -97,3 +97,23 @@
   display: flex;
   flex-direction: column;
 }
+
+.fpc-usage-visualization {
+  display: grid;
+  overflow: hidden;
+
+  &__cell {
+    display: block;
+  }
+
+  &__range-picker {
+    float: right;
+    margin-top: -(b.$spacer * 2.5);
+  }
+
+  &__empty {
+    text-align: center;
+    color: var(--bs-secondary);
+    padding: 2rem;
+  }
+}

@@ -6,6 +6,7 @@ import { LeaderboardRankingWidget } from "./leaderboard_ranking_widget";
 import { PenAndInkSuggestionWidget } from "./pen_and_ink_suggestion_widget";
 import { PensGroupedByBrandWidget } from "./pens_grouped_by_brand_widget";
 import { PensSummaryWidget } from "./pens_summary_widget";
+import { UsageVisualizationWidget } from "./usage_visualization_widget";
 
 export const WIDGET_REGISTRY = [
   {
@@ -39,6 +40,11 @@ export const WIDGET_REGISTRY = [
     id: "pen_and_ink_suggestion",
     label: "Pen & Ink Suggestion",
     component: PenAndInkSuggestionWidget
+  },
+  {
+    id: "usage_visualization",
+    label: "Usage Visualization",
+    component: UsageVisualizationWidget
   }
 ];
 
