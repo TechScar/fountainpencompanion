@@ -131,6 +131,7 @@ module RubyLlmAgent
 
     entries.each do |entry|
       entry = entry.deep_symbolize_keys
+      next if entry[:role].blank?
       next if entry[:role].to_s.in?(%w[system developer])
 
       attrs = { role: entry[:role].to_sym, content: entry[:content].to_s }
