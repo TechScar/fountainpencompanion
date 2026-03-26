@@ -125,14 +125,20 @@ class WidgetsController < ApplicationController
     ).perform
   end
 
-  USAGE_VIZ_RANGES = { "1m" => 1.month, "3m" => 3.months, "6m" => 6.months, "1y" => 1.year }.freeze
+  USAGE_VIZ_RANGES = {
+    "1m" => 1.month,
+    "3m" => 3.months,
+    "6m" => 6.months,
+    "1y" => 1.year,
+    "all" => nil
+  }.freeze
 
   COLOR_EXPRESSION = "COALESCE(NULLIF(collected_inks.color, ''), collected_inks.cluster_color)"
 
   def usage_visualization_data
-    range = params[:range].presence || "1m"
+    range = USAGE_VIZ_RANGES.key?(params[:range]) ? params[:range] : "1m"
     start_date = USAGE_VIZ_RANGES[range]&.ago&.to_date
-    short_range = %w[1m].include?(range)
+    short_range = range == "1m"
     usage_threshold = short_range ? 10 : 20
     ci_threshold = short_range ? 5 : 10
 
