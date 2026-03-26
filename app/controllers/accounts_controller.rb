@@ -41,6 +41,7 @@ class AccountsController < ApplicationController
     collected_pens_cards_hidden_fields
     currently_inked_table_hidden_fields
     currently_inked_cards_hidden_fields
+    dashboard_widgets
   ].freeze
 
   def accounts_params
@@ -56,7 +57,7 @@ class AccountsController < ApplicationController
         if value.nil?
           merged.delete(key.to_s)
         else
-          merged[key.to_s] = value
+          merged[key.to_s] = value.as_json
         end
       end
       permitted[:preferences] = merged

@@ -1,5 +1,11 @@
 @use "~bootstrap/scss/bootstrap" as b;
 
+.fpc-dashboard-header {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: b.$spacer;
+}
+
 .fpc-dashboard {
   display: grid;
   gap: b.$spacer;
@@ -20,6 +26,47 @@
     position: absolute;
     bottom: b.$spacer;
     left: b.$spacer;
+  }
+}
+
+.fpc-dashboard-configurable {
+  position: relative;
+  cursor: grab;
+  border: 2px dashed transparent;
+  border-radius: b.$border-radius;
+  transition:
+    transform 0.15s ease,
+    border-color 0.15s ease;
+
+  &:hover {
+    border-color: var(--bs-primary);
+  }
+
+  &--reordering {
+    transition: transform 0.15s ease;
+  }
+}
+
+.fpc-dashboard-widget-overlay {
+  position: absolute;
+  top: b.$spacer * 0.5;
+  right: b.$spacer * 0.5;
+  z-index: 10;
+
+  &--hidden {
+    position: static;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: b.$spacer;
+    background: var(--fpc-bright-background);
+    opacity: 0.5;
+    border-radius: b.$border-radius;
+    min-height: 60px;
+  }
+
+  &__label {
+    font-weight: 500;
   }
 }
 
