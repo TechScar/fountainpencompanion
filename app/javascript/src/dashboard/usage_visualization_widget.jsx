@@ -1,6 +1,6 @@
 import React, { useCallback, useContext, useEffect, useRef, useState } from "react";
 import convert from "color-convert";
-import { Widget, WidgetDataContext, WidgetWidthContext } from "./widgets";
+import { Widget, WidgetDataContext } from "./widgets";
 import { getRequest, putRequest } from "../fetch";
 import * as storage from "../localStorage";
 
@@ -477,7 +477,6 @@ function renderVoronoi(
 
 const UsageVisualizationWidgetContent = ({ range, setRange, speed, setSpeed }) => {
   const { data } = useContext(WidgetDataContext);
-  const width = useContext(WidgetWidthContext);
   const entries = data.attributes.entries;
   const source = data.attributes.source;
   const canvasRef = useRef(null);
@@ -525,21 +524,22 @@ const UsageVisualizationWidgetContent = ({ range, setRange, speed, setSpeed }) =
     );
     observer.observe(canvas);
     return () => observer.disconnect();
-  }, [hasEntries, width]);
+  }, [hasEntries]);
 
   useEffect(() => {
-    if (!hasEntries || !width) return;
+    if (!hasEntries) return;
 
     const cols = GRID_SIZE;
     const rows = GRID_SIZE;
     const totalPixels = cols * rows;
-    const canvasSize = Math.floor(width);
+    const canvasSize = GRID_SIZE * RENDER_SCALE;
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     canvas.width = canvasSize;
     canvas.height = canvasSize;
     const ctx = canvas.getContext("2d");
+    if (!ctx) return;
 
     runningRef.current = true;
 
@@ -672,7 +672,7 @@ const UsageVisualizationWidgetContent = ({ range, setRange, speed, setSpeed }) =
       resumeRef.current = null;
       if (animIdRef.current) cancelAnimationFrame(animIdRef.current);
     };
-  }, [entries, width, hasEntries, restartKey]);
+  }, [entries, hasEntries, restartKey]);
 
   const handleMouseMove = useCallback((e) => {
     const canvas = canvasRef.current;
