@@ -116,11 +116,10 @@ const RENDER_SCALE = 2;
 function buildGrid(entries, cols, rows) {
   const totalPixels = cols * rows;
   const totalCount = entries.reduce((sum, e) => sum + e.count, 0);
-  if (totalCount === 0) return { grid: [], inkNames: [], inkIds: [] };
+  if (totalCount === 0) return { grid: [], inkInfo: [] };
 
   const pixels = [];
-  const inkNames = [];
-  const inkIds = [];
+  const inkInfo = [];
   let assigned = 0;
 
   for (let i = 0; i < entries.length; i++) {
@@ -129,10 +128,10 @@ function buildGrid(entries, cols, rows) {
     const count = isLast
       ? totalPixels - assigned
       : Math.round((entry.count / totalCount) * totalPixels);
+    const info = { name: entry.ink_name, inkId: entry.ink_id || null };
     for (let j = 0; j < count; j++) {
       pixels.push(entry.color);
-      inkNames.push(entry.ink_name);
-      inkIds.push(entry.ink_id || null);
+      inkInfo.push(info);
     }
     assigned += count;
   }
@@ -141,11 +140,10 @@ function buildGrid(entries, cols, rows) {
   for (let i = pixels.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [pixels[i], pixels[j]] = [pixels[j], pixels[i]];
-    [inkNames[i], inkNames[j]] = [inkNames[j], inkNames[i]];
-    [inkIds[i], inkIds[j]] = [inkIds[j], inkIds[i]];
+    [inkInfo[i], inkInfo[j]] = [inkInfo[j], inkInfo[i]];
   }
 
-  return { grid: pixels, inkNames, inkIds };
+  return { grid: pixels, inkInfo };
 }
 
 function toroidalDist(r1, c1, r2, c2, rows, cols) {
@@ -271,7 +269,7 @@ const SPEED_OPTIONS = [
   { value: "fast", label: "Fast", fps: 60, multiplier: 6 }
 ];
 
-function simulationTick(grid, inkNames, cols, rows, rawCenters, blendedCenters, multiplier) {
+function simulationTick(grid, inkInfo, cols, rows, rawCenters, blendedCenters, multiplier) {
   const totalPixels = grid.length;
   const targetSwaps = Math.floor(totalPixels * 0.005 * multiplier);
   const maxAttempts = totalPixels * multiplier * 6;
@@ -326,7 +324,7 @@ function simulationTick(grid, inkNames, cols, rows, rawCenters, blendedCenters, 
     const centerPull = (compactA + compactB) * 0.5 + (driftA + driftB) * 4.5;
 
     [grid[a], grid[b]] = [grid[b], grid[a]];
-    [inkNames[a], inkNames[b]] = [inkNames[b], inkNames[a]];
+    [inkInfo[a], inkInfo[b]] = [inkInfo[b], inkInfo[a]];
 
     const newHappyA = countSameNeighbors(grid, a, cols, rows);
     const newHappyB = countSameNeighbors(grid, b, cols, rows);
@@ -350,7 +348,7 @@ function simulationTick(grid, inkNames, cols, rows, rawCenters, blendedCenters, 
       successes++;
     } else {
       [grid[a], grid[b]] = [grid[b], grid[a]];
-      [inkNames[a], inkNames[b]] = [inkNames[b], inkNames[a]];
+      [inkInfo[a], inkInfo[b]] = [inkInfo[b], inkInfo[a]];
     }
   }
 
@@ -478,22 +476,13 @@ function renderVoronoi(
   mainCtx.drawImage(offCtx.canvas, 0, 0, canvasSize, canvasSize);
 }
 
-function renderHighlight(
-  mainCtx,
-  canvasSize,
-  lockedInk,
-  inkNames,
-  inkIds,
-  cols,
-  rows,
-  renderScale
-) {
+function renderHighlight(mainCtx, canvasSize, lockedInk, inkInfo, cols, rows, renderScale) {
   if (!lockedInk) return;
 
   const matchFn =
     lockedInk.inkId != null
-      ? (i) => inkIds[i] === lockedInk.inkId
-      : (i) => inkNames[i] === lockedInk.name;
+      ? (i) => inkInfo[i].inkId === lockedInk.inkId
+      : (i) => inkInfo[i].name === lockedInk.name;
 
   const cellW = canvasSize / cols;
   const cellH = canvasSize / rows;
@@ -541,8 +530,7 @@ const UsageVisualizationWidgetContent = ({ range, setRange, speed, setSpeed }) =
   const source = data.attributes.source;
   const canvasRef = useRef(null);
   const gridRef = useRef(null);
-  const inkNamesRef = useRef(null);
-  const inkIdsRef = useRef(null);
+  const inkInfoRef = useRef(null);
   const runningRef = useRef(true);
   const visibleRef = useRef(false);
   const speedRef = useRef(speed);
@@ -606,10 +594,9 @@ const UsageVisualizationWidgetContent = ({ range, setRange, speed, setSpeed }) =
 
     runningRef.current = true;
 
-    const { grid, inkNames, inkIds } = buildGrid(entries, cols, rows);
+    const { grid, inkInfo } = buildGrid(entries, cols, rows);
     gridRef.current = grid;
-    inkNamesRef.current = inkNames;
-    inkIdsRef.current = inkIds;
+    inkInfoRef.current = inkInfo;
 
     // Voronoi rendering setup
     const kernel = gaussianKernel(BLUR_RADIUS);
@@ -649,16 +636,7 @@ const UsageVisualizationWidgetContent = ({ range, setRange, speed, setSpeed }) =
         renderH,
         canvasSize
       );
-      renderHighlight(
-        ctx,
-        canvasSize,
-        lockedInkRef.current,
-        inkNames,
-        inkIds,
-        cols,
-        rows,
-        RENDER_SCALE
-      );
+      renderHighlight(ctx, canvasSize, lockedInkRef.current, inkInfo, cols, rows, RENDER_SCALE);
     }
 
     redrawRef.current = redraw;
@@ -683,7 +661,7 @@ const UsageVisualizationWidgetContent = ({ range, setRange, speed, setSpeed }) =
         ({ rawCenters, blendedCenters } = computeCenters(grid, cols, colorDistances));
         const dirty = simulationTick(
           grid,
-          inkNames,
+          inkInfo,
           cols,
           rows,
           rawCenters,
@@ -754,18 +732,15 @@ const UsageVisualizationWidgetContent = ({ range, setRange, speed, setSpeed }) =
 
   const getInkAtPoint = useCallback((clientX, clientY) => {
     const canvas = canvasRef.current;
-    const inkNames = inkNamesRef.current;
-    const inkIds = inkIdsRef.current;
-    if (!canvas || !inkNames) return null;
+    const inkInfo = inkInfoRef.current;
+    if (!canvas || !inkInfo) return null;
 
     const rect = canvas.getBoundingClientRect();
     const col = Math.floor(((clientX - rect.left) * GRID_SIZE) / rect.width);
     const row = Math.floor(((clientY - rect.top) * GRID_SIZE) / rect.height);
 
     if (col >= 0 && col < GRID_SIZE && row >= 0 && row < GRID_SIZE) {
-      const idx = row * GRID_SIZE + col;
-      const name = inkNames[idx];
-      if (name) return { name, inkId: inkIds ? inkIds[idx] : null };
+      return inkInfo[row * GRID_SIZE + col] || null;
     }
     return null;
   }, []);
@@ -855,12 +830,18 @@ const UsageVisualizationWidgetContent = ({ range, setRange, speed, setSpeed }) =
             onTouchStart={handleTouchStart}
           />
           <div className="fpc-usage-visualization__label">
-            {displayedInk.inkId ? (
-              <a href={`/inks/${displayedInk.inkId}`} target="_blank" rel="noreferrer">
+            {displayedInk.name ? (
+              <>
                 {displayedInk.name}
-              </a>
+                {displayedInk.inkId && (
+                  <a href={`/inks/${displayedInk.inkId}`} target="_blank" rel="noreferrer">
+                    &nbsp;
+                    <i className="fa fa-external-link" />
+                  </a>
+                )}
+              </>
             ) : (
-              displayedInk.name || "\u00A0"
+              "\u00A0"
             )}
           </div>
         </>
