@@ -64,7 +64,7 @@ export const DraggableWidget = ({
           <div className="fpc-dashboard-widget-overlay__reorder">
             <button
               type="button"
-              className="btn btn-sm btn-outline-secondary"
+              className="btn btn-sm btn-secondary fpc-dashboard-widget-overlay__btn"
               disabled={isFirst}
               onClick={() => onMoveUp(index)}
               aria-label={`Move ${widget ? widget.label : id} up`}
@@ -73,7 +73,7 @@ export const DraggableWidget = ({
             </button>
             <button
               type="button"
-              className="btn btn-sm btn-outline-secondary"
+              className="btn btn-sm btn-secondary fpc-dashboard-widget-overlay__btn"
               disabled={isLast}
               onClick={() => onMoveDown(index)}
               aria-label={`Move ${widget ? widget.label : id} down`}

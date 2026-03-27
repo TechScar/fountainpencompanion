@@ -117,6 +117,9 @@
   }
 
   &__reorder {
+    position: absolute;
+    top: b.$spacer * 0.5;
+    right: b.$spacer * 0.5;
     display: none;
     gap: b.$spacer * 0.25;
 
