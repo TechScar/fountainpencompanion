@@ -1,6 +1,8 @@
 require "rails_helper"
 
 RSpec.describe RubyLlmAgent do
+  before(:each) { WebMock.reset! }
+
   let(:test_class) do
     Class.new do
       include RubyLlmAgent
@@ -10,6 +12,75 @@ RSpec.describe RubyLlmAgent do
       def initialize(agent_log)
         self.agent_log = agent_log
       end
+    end
+  end
+
+  let(:test_class_with_tools) do
+    Class.new do
+      include RubyLlmAgent
+
+      attr_accessor :agent_log, :decide_tool
+
+      def initialize(agent_log, decide_tool)
+        self.agent_log = agent_log
+        self.decide_tool = decide_tool
+      end
+
+      private
+
+      def model_id = "gpt-4.1-mini"
+      def system_directive = "You are a test agent."
+      def tools = [decide_tool]
+      def agent_token_env_var = "OPEN_AI_TOKEN"
+    end
+  end
+
+  let(:decide_tool_class) do
+    Class.new(RubyLLM::Tool) do
+      description "Make a decision"
+
+      def name = "decide"
+
+      param :choice, desc: "The decision"
+
+      def execute(choice:)
+        halt "decided: #{choice}"
+      end
+    end
+  end
+
+  let(:search_tool_class) do
+    Class.new(RubyLLM::Tool) do
+      description "Search for information"
+
+      def name = "search"
+
+      param :query, desc: "Search query"
+
+      def execute(query:)
+        "Results for: #{query}"
+      end
+    end
+  end
+
+  let(:test_class_with_research_tools) do
+    Class.new do
+      include RubyLlmAgent
+
+      attr_accessor :agent_log, :decide_tool, :search_tool
+
+      def initialize(agent_log, decide_tool, search_tool)
+        self.agent_log = agent_log
+        self.decide_tool = decide_tool
+        self.search_tool = search_tool
+      end
+
+      private
+
+      def model_id = "gpt-4.1-mini"
+      def system_directive = "You are a test agent."
+      def tools = [decide_tool, search_tool]
+      def agent_token_env_var = "OPEN_AI_TOKEN"
     end
   end
 
@@ -93,6 +164,186 @@ RSpec.describe RubyLlmAgent do
 
       result = agent.send(:trim_dangling_tool_calls, transcript)
       expect(result.length).to eq(1)
+    end
+  end
+
+  describe "#ask!" do
+    let(:agent_with_tools) { test_class_with_tools.new(agent_log, decide_tool_class.new) }
+
+    def tool_call_response(call_id: "call_1", name: "decide", arguments: { "choice" => "yes" })
+      {
+        "id" => "chatcmpl-#{call_id}",
+        "object" => "chat.completion",
+        "created" => 1_677_652_288,
+        "model" => "gpt-4.1-mini",
+        "choices" => [
+          {
+            "index" => 0,
+            "message" => {
+              "role" => "assistant",
+              "content" => "",
+              "tool_calls" => [
+                {
+                  "id" => call_id,
+                  "type" => "function",
+                  "function" => {
+                    "name" => name,
+                    "arguments" => arguments.to_json
+                  }
+                }
+              ]
+            },
+            "finish_reason" => "tool_calls"
+          }
+        ],
+        "usage" => {
+          "prompt_tokens" => 100,
+          "completion_tokens" => 20,
+          "total_tokens" => 120
+        }
+      }
+    end
+
+    def text_response(content: "I think the answer is yes.")
+      {
+        "id" => "chatcmpl-text",
+        "object" => "chat.completion",
+        "created" => 1_677_652_288,
+        "model" => "gpt-4.1-mini",
+        "choices" => [
+          {
+            "index" => 0,
+            "message" => {
+              "role" => "assistant",
+              "content" => content
+            },
+            "finish_reason" => "stop"
+          }
+        ],
+        "usage" => {
+          "prompt_tokens" => 100,
+          "completion_tokens" => 20,
+          "total_tokens" => 120
+        }
+      }
+    end
+
+    it "succeeds when LLM calls a halting tool on first try" do
+      stub_request(:post, "https://api.openai.com/v1/chat/completions").to_return(
+        status: 200,
+        body: tool_call_response.to_json,
+        headers: {
+          "Content-Type" => "application/json"
+        }
+      )
+
+      result = agent_with_tools.ask!("Make a decision")
+      expect(result).to be_a(RubyLLM::Tool::Halt)
+      expect(result.content).to eq("decided: yes")
+    end
+
+    it "retries when LLM responds with text and succeeds on retry" do
+      stub_request(:post, "https://api.openai.com/v1/chat/completions").to_return(
+        {
+          status: 200,
+          body: text_response.to_json,
+          headers: {
+            "Content-Type" => "application/json"
+          }
+        },
+        {
+          status: 200,
+          body: tool_call_response.to_json,
+          headers: {
+            "Content-Type" => "application/json"
+          }
+        }
+      )
+
+      result = agent_with_tools.ask!("Make a decision")
+      expect(result).to be_a(RubyLLM::Tool::Halt)
+    end
+
+    it "saves transcript after adding nudge message" do
+      stub_request(:post, "https://api.openai.com/v1/chat/completions").to_return(
+        {
+          status: 200,
+          body: text_response.to_json,
+          headers: {
+            "Content-Type" => "application/json"
+          }
+        },
+        {
+          status: 200,
+          body: tool_call_response.to_json,
+          headers: {
+            "Content-Type" => "application/json"
+          }
+        }
+      )
+
+      agent_with_tools.ask!("Make a decision")
+
+      nudge_messages =
+        agent_log.reload.transcript.select do |msg|
+          msg["role"] == "user" && msg["content"].include?("decision tools")
+        end
+      expect(nudge_messages.length).to eq(1)
+    end
+
+    it "raises DecisionNotReachedError after max retries" do
+      stub =
+        stub_request(:post, "https://api.openai.com/v1/chat/completions").to_return(
+          status: 200,
+          body: text_response.to_json,
+          headers: {
+            "Content-Type" => "application/json"
+          }
+        )
+
+      expect { agent_with_tools.ask!("Make a decision") }.to raise_error(
+        RubyLlmAgent::DecisionNotReachedError
+      )
+      # 1 initial + 3 retries = 4 total requests
+      expect(stub).to have_been_requested.times(4)
+    end
+
+    it "retries when LLM calls a non-halting tool then responds with text" do
+      agent =
+        test_class_with_research_tools.new(agent_log, decide_tool_class.new, search_tool_class.new)
+
+      search_response =
+        tool_call_response(call_id: "call_search", name: "search", arguments: { "query" => "test" })
+
+      stub_request(:post, "https://api.openai.com/v1/chat/completions").to_return(
+        # First call: LLM calls the non-halting search tool
+        {
+          status: 200,
+          body: search_response.to_json,
+          headers: {
+            "Content-Type" => "application/json"
+          }
+        },
+        # After search result, LLM responds with text instead of deciding
+        {
+          status: 200,
+          body: text_response.to_json,
+          headers: {
+            "Content-Type" => "application/json"
+          }
+        },
+        # Retry: LLM calls the halting decide tool
+        {
+          status: 200,
+          body: tool_call_response.to_json,
+          headers: {
+            "Content-Type" => "application/json"
+          }
+        }
+      )
+
+      result = agent.ask!("Make a decision")
+      expect(result).to be_a(RubyLLM::Tool::Halt)
     end
   end
 end

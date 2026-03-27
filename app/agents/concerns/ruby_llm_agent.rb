@@ -21,13 +21,35 @@ module RubyLlmAgent
     chat.complete
   end
 
-  # Like ask, but forces the LLM to produce a tool call via tool_choice: required.
-  # Use this when a tool call (that halts) is required for the agent to proceed.
+  # Like ask, but forces the LLM to produce a halting tool call.
+  # tool_choice: required only forces the first response to include a tool call,
+  # but after that RubyLLM resets it. If the LLM calls a non-halting tool first
+  # and then responds with text, we retry with a nudge message.
   def ask!(prompt)
     chat.add_message(role: :user, content: prompt)
     save_transcript
     chat.with_tool(nil, choice: :required)
-    chat.complete
+    result = chat.complete
+
+    MAX_DECISION_RETRIES.times do
+      break if result.is_a?(RubyLLM::Tool::Halt)
+
+      chat.add_message(
+        role: :user,
+        content:
+          "You must make a decision by calling one of the available decision tools. Do not respond with text."
+      )
+      save_transcript
+      chat.with_tool(nil, choice: :required)
+      result = chat.complete
+    end
+
+    unless result.is_a?(RubyLLM::Tool::Halt)
+      raise DecisionNotReachedError,
+            "#{self.class.name} failed to reach a decision after #{MAX_DECISION_RETRIES} retries"
+    end
+
+    result
   end
 
   def find_or_create_agent_log(owner)
@@ -75,6 +97,10 @@ module RubyLlmAgent
   end
 
   MAX_TOOL_CALLS = 50
+  MAX_DECISION_RETRIES = 3
+
+  class DecisionNotReachedError < StandardError
+  end
 
   # Multiple saves per round-trip are intentional: we save after each
   # interaction so the agent log reflects progress incrementally.
