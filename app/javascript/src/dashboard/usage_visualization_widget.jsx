@@ -674,22 +674,35 @@ const UsageVisualizationWidgetContent = ({ range, setRange, speed, setSpeed }) =
     };
   }, [entries, hasEntries, restartKey]);
 
-  const handleMouseMove = useCallback((e) => {
+  const [hoveredInk, setHoveredInk] = useState("");
+
+  const getInkNameAtPoint = useCallback((clientX, clientY) => {
     const canvas = canvasRef.current;
     const inkNames = inkNamesRef.current;
-    if (!canvas || !inkNames) return;
+    if (!canvas || !inkNames) return "";
 
     const rect = canvas.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
-    const col = Math.floor((mouseX * GRID_SIZE) / rect.width);
-    const row = Math.floor((mouseY * GRID_SIZE) / rect.height);
+    const col = Math.floor(((clientX - rect.left) * GRID_SIZE) / rect.width);
+    const row = Math.floor(((clientY - rect.top) * GRID_SIZE) / rect.height);
 
     if (col >= 0 && col < GRID_SIZE && row >= 0 && row < GRID_SIZE) {
-      const idx = row * GRID_SIZE + col;
-      canvas.title = inkNames[idx] || "";
+      return inkNames[row * GRID_SIZE + col] || "";
     }
+    return "";
   }, []);
+
+  const handleMouseMove = useCallback(
+    (e) => setHoveredInk(getInkNameAtPoint(e.clientX, e.clientY)),
+    [getInkNameAtPoint]
+  );
+
+  const handleTouchStart = useCallback(
+    (e) => {
+      const touch = e.touches[0];
+      if (touch) setHoveredInk(getInkNameAtPoint(touch.clientX, touch.clientY));
+    },
+    [getInkNameAtPoint]
+  );
 
   return (
     <>
@@ -725,11 +738,16 @@ const UsageVisualizationWidgetContent = ({ range, setRange, speed, setSpeed }) =
         </p>
       )}
       {hasEntries ? (
-        <canvas
-          ref={canvasRef}
-          className="fpc-usage-visualization__canvas"
-          onMouseMove={handleMouseMove}
-        />
+        <>
+          <canvas
+            ref={canvasRef}
+            className="fpc-usage-visualization__canvas"
+            onMouseMove={handleMouseMove}
+            onMouseLeave={() => setHoveredInk("")}
+            onTouchStart={handleTouchStart}
+          />
+          <div className="fpc-usage-visualization__label">{hoveredInk || "\u00A0"}</div>
+        </>
       ) : (
         <div className="fpc-usage-visualization__empty">
           Not enough usage data yet. Start logging daily usage on your currently inked pens to see
