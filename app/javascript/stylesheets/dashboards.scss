@@ -108,6 +108,14 @@
   justify-content: center;
   gap: b.$spacer * 0.5;
 
+  &__btn {
+    transition: transform 0.15s ease;
+
+    &:hover {
+      transform: scale(1.1);
+    }
+  }
+
   &__reorder {
     display: none;
     gap: b.$spacer * 0.25;

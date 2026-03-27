@@ -11,7 +11,7 @@ export const HiddenWidget = ({ id, onAdd }) => {
       <div className="fpc-dashboard-widget-overlay">
         <button
           type="button"
-          className="btn btn-sm btn-outline-primary"
+          className="btn btn-sm btn-primary fpc-dashboard-widget-overlay__btn"
           onClick={() => onAdd(id)}
           aria-label={`Add ${widget.label}`}
         >
@@ -82,7 +82,7 @@ export const DraggableWidget = ({
           </div>
           <button
             type="button"
-            className="btn btn-sm btn-outline-danger"
+            className="btn btn-sm btn-danger fpc-dashboard-widget-overlay__btn"
             onClick={() => onRemove(id)}
             aria-label={`Remove ${widget ? widget.label : id}`}
           >
