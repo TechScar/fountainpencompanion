@@ -184,9 +184,7 @@ class WidgetsController < ApplicationController
           Arel.sql("COUNT(*)"),
           "micro_clusters.macro_cluster_id"
         )
-    rows.map do |brand, ink, color, count, ink_id|
-      { ink_name: "#{brand} #{ink}", color: color, count: count, ink_id: ink_id }
-    end
+    build_entries(rows)
   end
 
   def currently_inked_entries
@@ -212,8 +210,16 @@ class WidgetsController < ApplicationController
           Arel.sql("COUNT(*)"),
           "micro_clusters.macro_cluster_id"
         )
+    build_entries(rows)
+  end
+
+  def build_entries(rows)
+    cluster_ids = rows.filter_map { |_, _, _, _, ink_id| ink_id }.uniq
+    clusters = MacroCluster.where(id: cluster_ids).index_by(&:id)
     rows.map do |brand, ink, color, count, ink_id|
-      { ink_name: "#{brand} #{ink}", color: color, count: count, ink_id: ink_id }
+      cluster = clusters[ink_id]
+      ink_name = cluster ? cluster.name : "#{brand} #{ink}"
+      { ink_name: ink_name, color: color, count: count, ink_id: ink_id }
     end
   end
 end
