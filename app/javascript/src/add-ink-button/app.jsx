@@ -25,6 +25,9 @@ const InternalApp = ({ macro_cluster_id, details, isVisible }) => {
       .then((json) => {
         setInCollection(json.data.length > 0);
         setLoading(false);
+      })
+      .catch(() => {
+        setLoading(false);
       });
   }, [macro_cluster_id, isVisible]);
   if (loading) {
@@ -45,11 +48,13 @@ const ActualInkAddButton = ({ macro_cluster_id, inCollection, detailView }) => {
   const [kind, setKind] = useState("bottle");
   const add = () => {
     setState("adding");
-    postRequest(`/collected_inks/add.json?macro_cluster_id=${macro_cluster_id}&kind=${kind}`).then(
-      () => {
+    postRequest(`/collected_inks/add.json?macro_cluster_id=${macro_cluster_id}&kind=${kind}`)
+      .then(() => {
         setState("added");
-      }
-    );
+      })
+      .catch(() => {
+        setState(null);
+      });
   };
   switch (state) {
     case "added":
