@@ -167,11 +167,13 @@ class WidgetsController < ApplicationController
     rows =
       scope
         .joins(currently_inked: :collected_ink)
+        .left_joins(currently_inked: { collected_ink: :micro_cluster })
         .where("#{COLOR_EXPRESSION} IS NOT NULL")
         .group(
           "collected_inks.id",
           "collected_inks.brand_name",
           "collected_inks.ink_name",
+          "micro_clusters.macro_cluster_id",
           COLOR_EXPRESSION
         )
         .order(Arel.sql("COUNT(*) DESC"))
@@ -179,11 +181,10 @@ class WidgetsController < ApplicationController
           "collected_inks.brand_name",
           "collected_inks.ink_name",
           Arel.sql(COLOR_EXPRESSION),
-          Arel.sql("COUNT(*)")
+          Arel.sql("COUNT(*)"),
+          "micro_clusters.macro_cluster_id"
         )
-    rows.map do |brand, ink, color, count|
-      { ink_name: "#{brand} #{ink}", color: color, count: count }
-    end
+    build_entries(rows)
   end
 
   def currently_inked_entries
@@ -192,11 +193,13 @@ class WidgetsController < ApplicationController
         .currently_inkeds
         .active
         .joins(:collected_ink)
+        .left_joins(collected_ink: :micro_cluster)
         .where("#{COLOR_EXPRESSION} IS NOT NULL")
         .group(
           "collected_inks.id",
           "collected_inks.brand_name",
           "collected_inks.ink_name",
+          "micro_clusters.macro_cluster_id",
           COLOR_EXPRESSION
         )
         .order(Arel.sql("COUNT(*) DESC"))
@@ -204,10 +207,19 @@ class WidgetsController < ApplicationController
           "collected_inks.brand_name",
           "collected_inks.ink_name",
           Arel.sql(COLOR_EXPRESSION),
-          Arel.sql("COUNT(*)")
+          Arel.sql("COUNT(*)"),
+          "micro_clusters.macro_cluster_id"
         )
-    rows.map do |brand, ink, color, count|
-      { ink_name: "#{brand} #{ink}", color: color, count: count }
+    build_entries(rows)
+  end
+
+  def build_entries(rows)
+    cluster_ids = rows.filter_map { |_, _, _, _, ink_id| ink_id }.uniq
+    clusters = MacroCluster.where(id: cluster_ids).index_by(&:id)
+    rows.map do |brand, ink, color, count, ink_id|
+      cluster = clusters[ink_id]
+      ink_name = cluster ? cluster.name : "#{brand} #{ink}"
+      { ink_name: ink_name, color: color, count: count, ink_id: ink_id }
     end
   end
 end

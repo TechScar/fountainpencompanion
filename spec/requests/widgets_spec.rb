@@ -192,6 +192,61 @@ describe WidgetsController do
         expect(body["data"]["attributes"]["total_count"]).to eq(11)
       end
 
+      it "includes ink_id from macro_cluster in usage_records entries" do
+        user = create(:user)
+        sign_in(user)
+        macro_cluster =
+          create(:macro_cluster, brand_name: "Pilot", line_name: "Iroshizuku", ink_name: "Kon-peki")
+        micro_cluster = create(:micro_cluster, macro_cluster: macro_cluster)
+        ink =
+          create(
+            :collected_ink,
+            brand_name: "Pilot",
+            ink_name: "Kon-peki",
+            color: "#0000ff",
+            micro_cluster: micro_cluster,
+            user: user
+          )
+        ci = create(:currently_inked, collected_ink: ink, user: user)
+        11.times do |i|
+          create(:usage_record, currently_inked: ci, used_on: (i + 1).days.ago.to_date)
+        end
+
+        get url, params: { range: "1m" }
+        body = JSON.parse(response.body)
+        entry = body["data"]["attributes"]["entries"][0]
+        expect(entry["ink_id"]).to eq(macro_cluster.id)
+        expect(entry["ink_name"]).to eq("Pilot Iroshizuku Kon-peki")
+      end
+
+      it "includes ink_id from macro_cluster in currently_inked entries" do
+        user = create(:user)
+        sign_in(user)
+        macro_cluster =
+          create(:macro_cluster, brand_name: "Diamine", line_name: "", ink_name: "Oxblood")
+        micro_cluster = create(:micro_cluster, macro_cluster: macro_cluster)
+        6.times do |i|
+          ink =
+            create(
+              :collected_ink,
+              brand_name: "Brand#{i}",
+              ink_name: "Ink#{i}",
+              color: "#0000ff",
+              micro_cluster: (i == 0 ? micro_cluster : nil),
+              user: user
+            )
+          create(:currently_inked, collected_ink: ink, user: user)
+        end
+
+        get url, params: { range: "1m" }
+        body = JSON.parse(response.body)
+        attrs = body["data"]["attributes"]
+        expect(attrs["source"]).to eq("currently_inked")
+        clustered_entry = attrs["entries"].find { |e| e["ink_id"] == macro_cluster.id }
+        expect(clustered_entry).to be_present
+        expect(clustered_entry["ink_name"]).to eq("Diamine Oxblood")
+      end
+
       it "uses cluster_color as fallback when color is empty" do
         user = create(:user)
         sign_in(user)
