@@ -1,9 +1,13 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { memo, useCallback, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { ErrorBoundary } from "../ErrorBoundary";
 import { DraggableWidget, HiddenWidget, useDragReorder } from "./dashboard_config";
 import { useDashboardPreferences } from "./useDashboardPreferences";
 import { WIDGET_REGISTRY, WIDGET_REGISTRY_MAP } from "./widget_registry";
+
+const WidgetSlot = memo(function WidgetSlot({ component: Component }) {
+  return <Component />;
+});
 
 document.addEventListener("DOMContentLoaded", () => {
   const el = document.getElementById("dashboard");
@@ -112,7 +116,7 @@ export const Dashboard = () => {
               onDrop={onDrop}
               onDragEnd={onDragEnd}
             >
-              <Component />
+              <WidgetSlot component={Component} />
             </DraggableWidget>
           );
         })}

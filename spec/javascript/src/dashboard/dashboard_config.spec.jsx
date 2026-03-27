@@ -4,9 +4,9 @@ import { renderHook, act } from "@testing-library/react";
 import { HiddenWidget, DraggableWidget, useDragReorder } from "dashboard/dashboard_config";
 
 describe("HiddenWidget", () => {
-  it("renders label and add button", () => {
+  it("renders the widget content and add button", () => {
     render(<HiddenWidget id="inks_summary" onAdd={jest.fn()} />);
-    expect(screen.getByText("Inks Summary")).toBeInTheDocument();
+    expect(screen.getByText("Inks")).toBeInTheDocument();
     expect(screen.getByLabelText("Add Inks Summary")).toBeInTheDocument();
   });
 
@@ -35,7 +35,7 @@ describe("DraggableWidget", () => {
     onDragEnd: jest.fn()
   };
 
-  it("renders children directly when not configuring", () => {
+  it("renders children without configure UI when not configuring", () => {
     render(
       <DraggableWidget {...defaultProps} configuring={false}>
         <div data-testid="child">Content</div>
