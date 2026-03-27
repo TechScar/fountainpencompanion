@@ -776,6 +776,7 @@ const UsageVisualizationWidgetContent = ({ range, setRange, speed, setSpeed }) =
 
   const handleTouchStart = useCallback(
     (e) => {
+      e.preventDefault();
       const touch = e.touches[0];
       if (touch) toggleLock(touch.clientX, touch.clientY);
     },
@@ -830,7 +831,7 @@ const UsageVisualizationWidgetContent = ({ range, setRange, speed, setSpeed }) =
             className="fpc-usage-visualization__canvas"
             onMouseMove={handleMouseMove}
             onMouseLeave={() => {
-              if (!lockedInk) setHoveredInk("");
+              if (!lockedInk) setHoveredInk(null);
             }}
             onClick={handleClick}
             onTouchStart={handleTouchStart}
