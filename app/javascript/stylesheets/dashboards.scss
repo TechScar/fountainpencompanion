@@ -90,6 +90,14 @@
   }
 }
 
+.fpc-dashboard-hidden {
+  position: relative;
+
+  > .fpc-dashboard-widget-overlay ~ * {
+    opacity: 0.4;
+  }
+}
+
 .fpc-dashboard-widget-overlay {
   position: absolute;
   inset: 0;
@@ -107,23 +115,6 @@
     @media (hover: none) {
       display: flex;
     }
-  }
-
-  &--hidden {
-    position: static;
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    align-self: start;
-    justify-content: space-between;
-    padding: b.$spacer;
-    background: var(--fpc-bright-background);
-    opacity: 0.5;
-    border-radius: b.$border-radius;
-  }
-
-  &__label {
-    font-weight: 500;
   }
 }
 

@@ -112,7 +112,7 @@ export const Dashboard = () => {
               onDrop={onDrop}
               onDragEnd={onDragEnd}
             >
-              <Component renderWhenInvisible={configuring} />
+              <Component />
             </DraggableWidget>
           );
         })}

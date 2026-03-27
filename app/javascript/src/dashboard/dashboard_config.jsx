@@ -4,18 +4,21 @@ import { WIDGET_REGISTRY_MAP } from "./widget_registry";
 export const HiddenWidget = ({ id, onAdd }) => {
   const widget = WIDGET_REGISTRY_MAP[id];
   if (!widget) return null;
+  const Component = widget.component;
 
   return (
-    <div className="fpc-dashboard-widget-overlay fpc-dashboard-widget-overlay--hidden">
-      <span className="fpc-dashboard-widget-overlay__label">{widget.label}</span>
-      <button
-        type="button"
-        className="btn btn-sm btn-outline-primary"
-        onClick={() => onAdd(id)}
-        aria-label={`Add ${widget.label}`}
-      >
-        + Add
-      </button>
+    <div className="fpc-dashboard-hidden">
+      <div className="fpc-dashboard-widget-overlay">
+        <button
+          type="button"
+          className="btn btn-sm btn-outline-primary"
+          onClick={() => onAdd(id)}
+          aria-label={`Add ${widget.label}`}
+        >
+          + Add
+        </button>
+      </div>
+      <Component renderWhenInvisible />
     </div>
   );
 };
