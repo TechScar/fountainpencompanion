@@ -794,7 +794,11 @@ const UsageVisualizationWidgetContent = ({ range, setRange, speed, setSpeed }) =
             <button
               type="button"
               className="btn btn-outline-secondary btn-sm ms-auto"
-              onClick={() => setRunning((r) => !r)}
+              onClick={() => {
+                setLockedInk(null);
+                setHoveredInk("");
+                setRunning((r) => !r);
+              }}
             >
               <i className={`fa fa-${running ? "stop" : "play"}`} />
             </button>
@@ -802,6 +806,8 @@ const UsageVisualizationWidgetContent = ({ range, setRange, speed, setSpeed }) =
               type="button"
               className="btn btn-outline-secondary btn-sm"
               onClick={() => {
+                setLockedInk(null);
+                setHoveredInk("");
                 setRunning(true);
                 runningRef.current = true;
                 setRestartKey((k) => k + 1);
