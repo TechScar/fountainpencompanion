@@ -722,7 +722,7 @@ const UsageVisualizationWidgetContent = ({ range, setRange, speed, setSpeed }) =
     };
   }, [entries, hasEntries, restartKey]);
 
-  const [hoveredInk, setHoveredInk] = useState("");
+  const [hoveredInk, setHoveredInk] = useState(null);
   const [lockedInk, setLockedInk] = useState(null);
 
   useEffect(() => {
@@ -749,7 +749,7 @@ const UsageVisualizationWidgetContent = ({ range, setRange, speed, setSpeed }) =
     (e) => {
       if (!lockedInk) {
         const ink = getInkAtPoint(e.clientX, e.clientY);
-        setHoveredInk(ink ? ink.name : "");
+        setHoveredInk(ink || null);
       }
     },
     [getInkAtPoint, lockedInk]
@@ -767,7 +767,7 @@ const UsageVisualizationWidgetContent = ({ range, setRange, speed, setSpeed }) =
         setRunning(false);
         return ink;
       });
-      setHoveredInk(ink.name);
+      setHoveredInk(ink);
     },
     [getInkAtPoint]
   );
@@ -782,7 +782,7 @@ const UsageVisualizationWidgetContent = ({ range, setRange, speed, setSpeed }) =
     [toggleLock]
   );
 
-  const displayedInk = lockedInk || { name: hoveredInk, inkId: null };
+  const displayedInk = lockedInk || hoveredInk || { name: "", inkId: null };
 
   return (
     <>
