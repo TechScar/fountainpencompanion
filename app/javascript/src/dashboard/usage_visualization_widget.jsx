@@ -113,7 +113,7 @@ const SWAP_RADIUS = 15;
 const BLUR_RADIUS = 2;
 const RENDER_SCALE = 2;
 
-function buildGrid(entries, cols, rows) {
+export function buildGrid(entries, cols, rows) {
   const totalPixels = cols * rows;
   const totalCount = entries.reduce((sum, e) => sum + e.count, 0);
   if (totalCount === 0) return { grid: [], inkInfo: [] };
