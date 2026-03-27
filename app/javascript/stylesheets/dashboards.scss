@@ -100,6 +100,11 @@
   justify-content: center;
   gap: b.$spacer * 0.5;
 
+  // Reset flex: 1 inherited from .fpc-dashboard's grid propagation rules
+  > * {
+    flex: none;
+  }
+
   &__reorder {
     display: none;
     gap: b.$spacer * 0.25;
