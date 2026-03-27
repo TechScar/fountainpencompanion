@@ -1,8 +1,6 @@
 require "rails_helper"
 
 RSpec.describe RubyLlmAgent do
-  before(:each) { WebMock.reset! }
-
   let(:test_class) do
     Class.new do
       include RubyLlmAgent
