@@ -538,6 +538,7 @@ const UsageVisualizationWidgetContent = ({ range, setRange, speed, setSpeed }) =
   const resumeRef = useRef(null);
   const redrawRef = useRef(null);
   const lockedInkRef = useRef("");
+  const lastTouchRef = useRef(0);
   const hasEntries = entries.length > 0;
   const [running, setRunning] = useState(true);
   const [restartKey, setRestartKey] = useState(0);
@@ -747,12 +748,13 @@ const UsageVisualizationWidgetContent = ({ range, setRange, speed, setSpeed }) =
 
   const handleMouseMove = useCallback(
     (e) => {
-      if (!lockedInk) {
+      if (Date.now() - lastTouchRef.current < 500) return;
+      if (!lockedInkRef.current) {
         const ink = getInkAtPoint(e.clientX, e.clientY);
         setHoveredInk(ink || null);
       }
     },
-    [getInkAtPoint, lockedInk]
+    [getInkAtPoint]
   );
 
   const toggleLock = useCallback(
@@ -762,9 +764,13 @@ const UsageVisualizationWidgetContent = ({ range, setRange, speed, setSpeed }) =
       setLockedInk((prev) => {
         const isSame =
           prev && prev.inkId != null ? prev.inkId === ink.inkId : prev?.name === ink.name;
-        if (isSame) return null;
+        if (isSame) {
+          lockedInkRef.current = null;
+          return null;
+        }
         runningRef.current = false;
         setRunning(false);
+        lockedInkRef.current = ink;
         return ink;
       });
       setHoveredInk(ink);
@@ -772,11 +778,18 @@ const UsageVisualizationWidgetContent = ({ range, setRange, speed, setSpeed }) =
     [getInkAtPoint]
   );
 
-  const handleClick = useCallback((e) => toggleLock(e.clientX, e.clientY), [toggleLock]);
+  const handleClick = useCallback(
+    (e) => {
+      if (Date.now() - lastTouchRef.current < 500) return;
+      toggleLock(e.clientX, e.clientY);
+    },
+    [toggleLock]
+  );
 
   const handleTouchStart = useCallback(
     (e) => {
       e.preventDefault();
+      lastTouchRef.current = Date.now();
       const touch = e.touches[0];
       if (touch) toggleLock(touch.clientX, touch.clientY);
     },
@@ -797,7 +810,7 @@ const UsageVisualizationWidgetContent = ({ range, setRange, speed, setSpeed }) =
               className="btn btn-outline-secondary btn-sm ms-auto"
               onClick={() => {
                 setLockedInk(null);
-                setHoveredInk("");
+                setHoveredInk(null);
                 setRunning((r) => !r);
               }}
             >
@@ -808,7 +821,7 @@ const UsageVisualizationWidgetContent = ({ range, setRange, speed, setSpeed }) =
               className="btn btn-outline-secondary btn-sm"
               onClick={() => {
                 setLockedInk(null);
-                setHoveredInk("");
+                setHoveredInk(null);
                 setRunning(true);
                 runningRef.current = true;
                 setRestartKey((k) => k + 1);
@@ -831,7 +844,7 @@ const UsageVisualizationWidgetContent = ({ range, setRange, speed, setSpeed }) =
             className="fpc-usage-visualization__canvas"
             onMouseMove={handleMouseMove}
             onMouseLeave={() => {
-              if (!lockedInk) setHoveredInk(null);
+              if (!lockedInkRef.current) setHoveredInk(null);
             }}
             onClick={handleClick}
             onTouchStart={handleTouchStart}
