@@ -116,10 +116,11 @@ const RENDER_SCALE = 2;
 function buildGrid(entries, cols, rows) {
   const totalPixels = cols * rows;
   const totalCount = entries.reduce((sum, e) => sum + e.count, 0);
-  if (totalCount === 0) return { grid: [], inkNames: [] };
+  if (totalCount === 0) return { grid: [], inkNames: [], inkIds: [] };
 
   const pixels = [];
   const inkNames = [];
+  const inkIds = [];
   let assigned = 0;
 
   for (let i = 0; i < entries.length; i++) {
@@ -131,6 +132,7 @@ function buildGrid(entries, cols, rows) {
     for (let j = 0; j < count; j++) {
       pixels.push(entry.color);
       inkNames.push(entry.ink_name);
+      inkIds.push(entry.ink_id || null);
     }
     assigned += count;
   }
@@ -140,9 +142,10 @@ function buildGrid(entries, cols, rows) {
     const j = Math.floor(Math.random() * (i + 1));
     [pixels[i], pixels[j]] = [pixels[j], pixels[i]];
     [inkNames[i], inkNames[j]] = [inkNames[j], inkNames[i]];
+    [inkIds[i], inkIds[j]] = [inkIds[j], inkIds[i]];
   }
 
-  return { grid: pixels, inkNames };
+  return { grid: pixels, inkNames, inkIds };
 }
 
 function toroidalDist(r1, c1, r2, c2, rows, cols) {
@@ -475,8 +478,22 @@ function renderVoronoi(
   mainCtx.drawImage(offCtx.canvas, 0, 0, canvasSize, canvasSize);
 }
 
-function renderHighlight(mainCtx, canvasSize, inkNames, lockedInkName, cols, rows, renderScale) {
-  if (!lockedInkName) return;
+function renderHighlight(
+  mainCtx,
+  canvasSize,
+  lockedInk,
+  inkNames,
+  inkIds,
+  cols,
+  rows,
+  renderScale
+) {
+  if (!lockedInk) return;
+
+  const matchFn =
+    lockedInk.inkId != null
+      ? (i) => inkIds[i] === lockedInk.inkId
+      : (i) => inkNames[i] === lockedInk.name;
 
   const cellW = canvasSize / cols;
   const cellH = canvasSize / rows;
@@ -485,30 +502,30 @@ function renderHighlight(mainCtx, canvasSize, inkNames, lockedInkName, cols, row
   mainCtx.strokeStyle = "rgba(255, 255, 255, 0.9)";
   mainCtx.lineWidth = Math.max(1, renderScale);
   for (let i = 0; i < cols * rows; i++) {
-    if (inkNames[i] !== lockedInkName) continue;
+    if (!matchFn(i)) continue;
     const col = i % cols;
     const row = Math.floor(i / cols);
     const x = col * cellW;
     const y = row * cellH;
-    if (col === 0 || inkNames[i - 1] !== lockedInkName) {
+    if (col === 0 || !matchFn(i - 1)) {
       mainCtx.beginPath();
       mainCtx.moveTo(x, y);
       mainCtx.lineTo(x, y + cellH);
       mainCtx.stroke();
     }
-    if (col === cols - 1 || inkNames[i + 1] !== lockedInkName) {
+    if (col === cols - 1 || !matchFn(i + 1)) {
       mainCtx.beginPath();
       mainCtx.moveTo(x + cellW, y);
       mainCtx.lineTo(x + cellW, y + cellH);
       mainCtx.stroke();
     }
-    if (row === 0 || inkNames[i - cols] !== lockedInkName) {
+    if (row === 0 || !matchFn(i - cols)) {
       mainCtx.beginPath();
       mainCtx.moveTo(x, y);
       mainCtx.lineTo(x + cellW, y);
       mainCtx.stroke();
     }
-    if (row === rows - 1 || inkNames[i + cols] !== lockedInkName) {
+    if (row === rows - 1 || !matchFn(i + cols)) {
       mainCtx.beginPath();
       mainCtx.moveTo(x, y + cellH);
       mainCtx.lineTo(x + cellW, y + cellH);
@@ -525,6 +542,7 @@ const UsageVisualizationWidgetContent = ({ range, setRange, speed, setSpeed }) =
   const canvasRef = useRef(null);
   const gridRef = useRef(null);
   const inkNamesRef = useRef(null);
+  const inkIdsRef = useRef(null);
   const runningRef = useRef(true);
   const visibleRef = useRef(false);
   const speedRef = useRef(speed);
@@ -588,9 +606,10 @@ const UsageVisualizationWidgetContent = ({ range, setRange, speed, setSpeed }) =
 
     runningRef.current = true;
 
-    const { grid, inkNames } = buildGrid(entries, cols, rows);
+    const { grid, inkNames, inkIds } = buildGrid(entries, cols, rows);
     gridRef.current = grid;
     inkNamesRef.current = inkNames;
+    inkIdsRef.current = inkIds;
 
     // Voronoi rendering setup
     const kernel = gaussianKernel(BLUR_RADIUS);
@@ -630,7 +649,16 @@ const UsageVisualizationWidgetContent = ({ range, setRange, speed, setSpeed }) =
         renderH,
         canvasSize
       );
-      renderHighlight(ctx, canvasSize, inkNames, lockedInkRef.current, cols, rows, RENDER_SCALE);
+      renderHighlight(
+        ctx,
+        canvasSize,
+        lockedInkRef.current,
+        inkNames,
+        inkIds,
+        cols,
+        rows,
+        RENDER_SCALE
+      );
     }
 
     redrawRef.current = redraw;
@@ -717,49 +745,56 @@ const UsageVisualizationWidgetContent = ({ range, setRange, speed, setSpeed }) =
   }, [entries, hasEntries, restartKey]);
 
   const [hoveredInk, setHoveredInk] = useState("");
-  const [lockedInk, setLockedInk] = useState("");
+  const [lockedInk, setLockedInk] = useState(null);
 
   useEffect(() => {
     lockedInkRef.current = lockedInk;
     if (redrawRef.current) redrawRef.current();
   }, [lockedInk]);
 
-  const getInkNameAtPoint = useCallback((clientX, clientY) => {
+  const getInkAtPoint = useCallback((clientX, clientY) => {
     const canvas = canvasRef.current;
     const inkNames = inkNamesRef.current;
-    if (!canvas || !inkNames) return "";
+    const inkIds = inkIdsRef.current;
+    if (!canvas || !inkNames) return null;
 
     const rect = canvas.getBoundingClientRect();
     const col = Math.floor(((clientX - rect.left) * GRID_SIZE) / rect.width);
     const row = Math.floor(((clientY - rect.top) * GRID_SIZE) / rect.height);
 
     if (col >= 0 && col < GRID_SIZE && row >= 0 && row < GRID_SIZE) {
-      return inkNames[row * GRID_SIZE + col] || "";
+      const idx = row * GRID_SIZE + col;
+      const name = inkNames[idx];
+      if (name) return { name, inkId: inkIds ? inkIds[idx] : null };
     }
-    return "";
+    return null;
   }, []);
 
   const handleMouseMove = useCallback(
     (e) => {
-      if (!lockedInk) setHoveredInk(getInkNameAtPoint(e.clientX, e.clientY));
+      if (!lockedInk) {
+        const ink = getInkAtPoint(e.clientX, e.clientY);
+        setHoveredInk(ink ? ink.name : "");
+      }
     },
-    [getInkNameAtPoint, lockedInk]
+    [getInkAtPoint, lockedInk]
   );
 
   const toggleLock = useCallback(
     (clientX, clientY) => {
-      const name = getInkNameAtPoint(clientX, clientY);
+      const ink = getInkAtPoint(clientX, clientY);
+      if (!ink) return;
       setLockedInk((prev) => {
-        const next = prev === name ? "" : name;
-        if (next) {
-          runningRef.current = false;
-          setRunning(false);
-        }
-        return next;
+        const isSame =
+          prev && prev.inkId != null ? prev.inkId === ink.inkId : prev?.name === ink.name;
+        if (isSame) return null;
+        runningRef.current = false;
+        setRunning(false);
+        return ink;
       });
-      setHoveredInk(name);
+      setHoveredInk(ink.name);
     },
-    [getInkNameAtPoint]
+    [getInkAtPoint]
   );
 
   const handleClick = useCallback((e) => toggleLock(e.clientX, e.clientY), [toggleLock]);
@@ -772,7 +807,7 @@ const UsageVisualizationWidgetContent = ({ range, setRange, speed, setSpeed }) =
     [toggleLock]
   );
 
-  const displayedInk = lockedInk || hoveredInk;
+  const displayedInk = lockedInk || { name: hoveredInk, inkId: null };
 
   return (
     <>
@@ -819,7 +854,15 @@ const UsageVisualizationWidgetContent = ({ range, setRange, speed, setSpeed }) =
             onClick={handleClick}
             onTouchStart={handleTouchStart}
           />
-          <div className="fpc-usage-visualization__label">{displayedInk || "\u00A0"}</div>
+          <div className="fpc-usage-visualization__label">
+            {displayedInk.inkId ? (
+              <a href={`/inks/${displayedInk.inkId}`} target="_blank" rel="noreferrer">
+                {displayedInk.name}
+              </a>
+            ) : (
+              displayedInk.name || "\u00A0"
+            )}
+          </div>
         </>
       ) : (
         <div className="fpc-usage-visualization__empty">

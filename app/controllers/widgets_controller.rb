@@ -167,11 +167,13 @@ class WidgetsController < ApplicationController
     rows =
       scope
         .joins(currently_inked: :collected_ink)
+        .left_joins(currently_inked: { collected_ink: :micro_cluster })
         .where("#{COLOR_EXPRESSION} IS NOT NULL")
         .group(
           "collected_inks.id",
           "collected_inks.brand_name",
           "collected_inks.ink_name",
+          "micro_clusters.macro_cluster_id",
           COLOR_EXPRESSION
         )
         .order(Arel.sql("COUNT(*) DESC"))
@@ -179,10 +181,11 @@ class WidgetsController < ApplicationController
           "collected_inks.brand_name",
           "collected_inks.ink_name",
           Arel.sql(COLOR_EXPRESSION),
-          Arel.sql("COUNT(*)")
+          Arel.sql("COUNT(*)"),
+          "micro_clusters.macro_cluster_id"
         )
-    rows.map do |brand, ink, color, count|
-      { ink_name: "#{brand} #{ink}", color: color, count: count }
+    rows.map do |brand, ink, color, count, ink_id|
+      { ink_name: "#{brand} #{ink}", color: color, count: count, ink_id: ink_id }
     end
   end
 
@@ -192,11 +195,13 @@ class WidgetsController < ApplicationController
         .currently_inkeds
         .active
         .joins(:collected_ink)
+        .left_joins(collected_ink: :micro_cluster)
         .where("#{COLOR_EXPRESSION} IS NOT NULL")
         .group(
           "collected_inks.id",
           "collected_inks.brand_name",
           "collected_inks.ink_name",
+          "micro_clusters.macro_cluster_id",
           COLOR_EXPRESSION
         )
         .order(Arel.sql("COUNT(*) DESC"))
@@ -204,10 +209,11 @@ class WidgetsController < ApplicationController
           "collected_inks.brand_name",
           "collected_inks.ink_name",
           Arel.sql(COLOR_EXPRESSION),
-          Arel.sql("COUNT(*)")
+          Arel.sql("COUNT(*)"),
+          "micro_clusters.macro_cluster_id"
         )
-    rows.map do |brand, ink, color, count|
-      { ink_name: "#{brand} #{ink}", color: color, count: count }
+    rows.map do |brand, ink, color, count, ink_id|
+      { ink_name: "#{brand} #{ink}", color: color, count: count, ink_id: ink_id }
     end
   end
 end
