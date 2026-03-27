@@ -36,56 +36,57 @@ export const DraggableWidget = ({
   onDragEnd,
   children
 }) => {
-  if (!configuring) return children;
-
   const widget = WIDGET_REGISTRY_MAP[id];
 
-  const classNames = [
-    "fpc-dashboard-configurable",
-    dragging ? "fpc-dashboard-configurable--reordering" : ""
-  ]
-    .filter(Boolean)
-    .join(" ");
+  const classNames =
+    [
+      configuring && "fpc-dashboard-configurable",
+      configuring && dragging && "fpc-dashboard-configurable--reordering"
+    ]
+      .filter(Boolean)
+      .join(" ") || undefined;
 
   return (
     <div
       className={classNames}
-      draggable
-      onDragStart={(e) => onDragStart(e, index)}
-      onDragOver={(e) => onDragOver(e, index)}
-      onDrop={(e) => onDrop(e)}
-      onDragEnd={onDragEnd}
+      draggable={configuring || undefined}
+      onDragStart={configuring ? (e) => onDragStart(e, index) : undefined}
+      onDragOver={configuring ? (e) => onDragOver(e, index) : undefined}
+      onDrop={configuring ? (e) => onDrop(e) : undefined}
+      onDragEnd={configuring ? onDragEnd : undefined}
     >
-      <div className="fpc-dashboard-widget-overlay">
-        <div className="fpc-dashboard-widget-overlay__reorder">
+      {configuring && (
+        <div className="fpc-dashboard-widget-overlay">
+          <div className="fpc-dashboard-widget-overlay__reorder">
+            <button
+              type="button"
+              className="btn btn-sm btn-outline-secondary"
+              disabled={isFirst}
+              onClick={() => onMoveUp(index)}
+              aria-label={`Move ${widget ? widget.label : id} up`}
+            >
+              &uarr;
+            </button>
+            <button
+              type="button"
+              className="btn btn-sm btn-outline-secondary"
+              disabled={isLast}
+              onClick={() => onMoveDown(index)}
+              aria-label={`Move ${widget ? widget.label : id} down`}
+            >
+              &darr;
+            </button>
+          </div>
           <button
             type="button"
-            className="btn btn-sm btn-outline-secondary"
-            disabled={isFirst}
-            onClick={() => onMoveUp(index)}
-            aria-label={`Move ${widget ? widget.label : id} up`}
+            className="btn btn-sm btn-outline-danger"
+            onClick={() => onRemove(id)}
+            aria-label={`Remove ${widget ? widget.label : id}`}
           >
-            &uarr;
-          </button>
-          <button
-            type="button"
-            className="btn btn-sm btn-outline-secondary"
-            disabled={isLast}
-            onClick={() => onMoveDown(index)}
-            aria-label={`Move ${widget ? widget.label : id} down`}
-          >
-            &darr;
+            &times; Remove
           </button>
         </div>
-        <button
-          type="button"
-          className="btn btn-sm btn-outline-danger"
-          onClick={() => onRemove(id)}
-          aria-label={`Remove ${widget ? widget.label : id}`}
-        >
-          &times; Remove
-        </button>
-      </div>
+      )}
       {children}
     </div>
   );

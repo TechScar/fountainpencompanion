@@ -35,7 +35,7 @@ describe("DraggableWidget", () => {
     onDragEnd: jest.fn()
   };
 
-  it("renders children directly when not configuring", () => {
+  it("renders children without configure UI when not configuring", () => {
     render(
       <DraggableWidget {...defaultProps} configuring={false}>
         <div data-testid="child">Content</div>
