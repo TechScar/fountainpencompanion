@@ -56,7 +56,7 @@ jobs:
       - name: Run tests
         run: bundle exec rake
       - name: Report to CodeCov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           flags: ruby
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -82,7 +82,7 @@ jobs:
       - name: Run tests
         run: yarn jest
       - name: Report to CodeCov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           flags: javascript
           token: ${{ secrets.CODECOV_TOKEN }}
