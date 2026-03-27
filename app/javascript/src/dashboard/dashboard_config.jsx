@@ -58,6 +58,7 @@ export const DraggableWidget = ({
       onDrop={configuring ? (e) => onDrop(e) : undefined}
       onDragEnd={configuring ? onDragEnd : undefined}
     >
+      {children}
       {configuring && (
         <div className="fpc-dashboard-widget-overlay">
           <div className="fpc-dashboard-widget-overlay__reorder">
@@ -90,7 +91,6 @@ export const DraggableWidget = ({
           </button>
         </div>
       )}
-      {children}
     </div>
   );
 };
