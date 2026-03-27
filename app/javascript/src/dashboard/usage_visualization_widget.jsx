@@ -481,47 +481,15 @@ function renderHighlight(mainCtx, canvasSize, inkNames, lockedInkName, cols, row
   const cellW = canvasSize / cols;
   const cellH = canvasSize / rows;
 
-  // Dim entire canvas
-  mainCtx.fillStyle = "rgba(0, 0, 0, 0.4)";
-  mainCtx.fillRect(0, 0, canvasSize, canvasSize);
-
-  // Cut out the selected ink's cells by clearing them and re-drawing from the
-  // already-rendered image. Instead, we use destination-out to erase the dimming
-  // layer over the selected cells. Simpler: build a path of selected cells and
-  // clear the overlay there.
-  // Approach: save before dimming, dim, then clip-restore selected area.
-  // Actually simplest: we already dimmed. Now clear the dim over selected cells
-  // by drawing them back. We can use globalCompositeOperation.
-
-  // Re-draw the selected ink area at full brightness by clearing the dim overlay.
-  // We'll draw the original image data back over selected cells using a clipping path.
   mainCtx.save();
-  mainCtx.beginPath();
-  for (let i = 0; i < cols * rows; i++) {
-    if (inkNames[i] === lockedInkName) {
-      const col = i % cols;
-      const row = Math.floor(i / cols);
-      mainCtx.rect(col * cellW, row * cellH, cellW, cellH);
-    }
-  }
-  mainCtx.clip();
-  // Remove the dim by drawing a "clearing" rect with destination-out
-  mainCtx.globalCompositeOperation = "destination-out";
-  mainCtx.fillStyle = "rgba(0, 0, 0, 0.4)";
-  mainCtx.fillRect(0, 0, canvasSize, canvasSize);
-  mainCtx.restore();
-
-  // Draw border around selected ink's edges
-  mainCtx.save();
-  mainCtx.strokeStyle = "rgba(255, 255, 255, 0.8)";
-  mainCtx.lineWidth = Math.max(1, renderScale * 0.5);
+  mainCtx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+  mainCtx.lineWidth = Math.max(1, renderScale);
   for (let i = 0; i < cols * rows; i++) {
     if (inkNames[i] !== lockedInkName) continue;
     const col = i % cols;
     const row = Math.floor(i / cols);
     const x = col * cellW;
     const y = row * cellH;
-    // Check 4-neighbors for edges
     if (col === 0 || inkNames[i - 1] !== lockedInkName) {
       mainCtx.beginPath();
       mainCtx.moveTo(x, y);
