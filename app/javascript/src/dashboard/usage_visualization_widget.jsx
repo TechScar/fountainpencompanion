@@ -852,10 +852,9 @@ const UsageVisualizationWidgetContent = ({ range, setRange, speed, setSpeed }) =
           <div className="fpc-usage-visualization__label">
             {displayedInk.name ? (
               <>
-                {displayedInk.name}
+                <span className="fpc-usage-visualization__label-name">{displayedInk.name}</span>
                 {displayedInk.inkId && (
                   <a href={`/inks/${displayedInk.inkId}`} target="_blank" rel="noreferrer">
-                    &nbsp;
                     <i className="fa fa-external-link" />
                   </a>
                 )}
