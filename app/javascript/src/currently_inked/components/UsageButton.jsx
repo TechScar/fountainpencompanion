@@ -32,6 +32,8 @@ export const UsageButton = ({ used, id, onUsageRecorded }) => {
           onUsageRecorded(entry);
         }
       }
+    } catch {
+      // Network error — silently ignore, matching pattern from other components
     } finally {
       setLoading(false);
     }

@@ -78,6 +78,20 @@ describe("<UsageButton />", () => {
     expect(entry.daily_usage).toBe(3);
   });
 
+  it("handles network errors gracefully", async () => {
+    server.use(
+      rest.post("/currently_inked/1/usage_record.json", (req, res) => {
+        return res.networkError("Failed to fetch");
+      })
+    );
+    render(<UsageButton used={false} id={1} />);
+    const button = await screen.findByTitle("Record usage for today");
+    await userEvent.click(button);
+    await waitFor(() => {
+      expect(screen.getByTitle("Record usage for today")).toBeInTheDocument();
+    });
+  });
+
   it("is not clickable when already used today", () => {
     render(<UsageButton used={true} id={1} />);
     const el = screen.getByTitle("Already recorded usage for today");
