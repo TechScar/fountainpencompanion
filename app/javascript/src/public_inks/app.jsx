@@ -12,9 +12,9 @@ export default class App extends React.Component {
   }
 
   componentDidMount() {
-    getUserData((data) => this.setState({ userData: data })).then(() =>
-      getloggedInUserData((data) => this.setState({ loggedInUserData: data }))
-    );
+    getUserData((data) => this.setState({ userData: data }))
+      .then(() => getloggedInUserData((data) => this.setState({ loggedInUserData: data })))
+      .catch(() => {});
   }
 
   tableData() {
