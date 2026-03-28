@@ -23,7 +23,7 @@ export const CurrentlyInked = () => {
       const data = await getCurrentlyInked();
       setCurrentlyInked(_.sortBy(data, "pen_name"));
     }
-    getData();
+    getData().catch(() => {});
   }, []);
 
   const updateEntry = useCallback((updatedEntry) => {
