@@ -56,6 +56,13 @@ nav class="fpc-header navbar navbar-dark navbar-expand-lg" id="header"
               li= link_to "Usage records", usage_records_path, class: "dropdown-item"
               li
                 hr class="dropdown-divider"
+                span class="dropdown-header" Theme
+              - selected_theme_mode = theme_mode
+              li= link_to "Auto", "#", class: "dropdown-item #{'active' if selected_theme_mode == 'auto'}", role: "button", data: { theme_mode: "auto" }
+              li= link_to "Dark", "#", class: "dropdown-item #{'active' if selected_theme_mode == 'dark'}", role: "button", data: { theme_mode: "dark" }
+              li= link_to "Light", "#", class: "dropdown-item #{'active' if selected_theme_mode == 'light'}", role: "button", data: { theme_mode: "light" }
+              li
+                hr class="dropdown-divider"
               li= link_to "Log out", destroy_user_session_path, method: :delete, class: "dropdown-item"
         - else
           li= link_to "Sign up", new_user_registration_path, class: "nav-link"

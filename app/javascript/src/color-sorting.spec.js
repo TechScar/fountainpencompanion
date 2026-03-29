@@ -1,4 +1,5 @@
 // @ts-check
+import { describe, expect, it } from "@jest/globals";
 import { colorSort } from "./color-sorting";
 
 describe("colorSort", () => {

@@ -1,9 +1,18 @@
 module ApplicationHelper
   THEME_COOKIE_KEY = "fpc-theme".freeze
+  THEME_MODE_COOKIE_KEY = "fpc-theme-mode".freeze
+  THEME_MODES = %w[auto dark light].freeze
 
   def bootstrap_theme
+    return theme_mode if %w[dark light].include?(theme_mode)
+
     theme = cookies[THEME_COOKIE_KEY]
     %w[dark light].include?(theme) ? theme : "light"
+  end
+
+  def theme_mode
+    mode = cookies[THEME_MODE_COOKIE_KEY]
+    THEME_MODES.include?(mode) ? mode : "auto"
   end
 
   def patron_tiny(user)
