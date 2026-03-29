@@ -6,17 +6,24 @@
 (() => {
   "use strict";
 
+  const cookieKey = "fpc-theme";
+
+  const getSystemTheme = () =>
+    window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+
   const getPreferredTheme = () => {
-    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    return getSystemTheme();
   };
 
   const setTheme = (theme) => {
     document.documentElement.setAttribute("data-bs-theme", theme);
+
+    document.cookie = `${cookieKey}=${theme};path=/;max-age=31536000;samesite=lax`;
   };
 
   setTheme(getPreferredTheme());
 
-  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
-    setTheme(getPreferredTheme());
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (event) => {
+    setTheme(event.matches ? "dark" : "light");
   });
 })();

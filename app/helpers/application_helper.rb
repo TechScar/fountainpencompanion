@@ -1,4 +1,11 @@
 module ApplicationHelper
+  THEME_COOKIE_KEY = "fpc-theme".freeze
+
+  def bootstrap_theme
+    theme = cookies[THEME_COOKIE_KEY]
+    %w[dark light].include?(theme) ? theme : "light"
+  end
+
   def patron_tiny(user)
     title = "Supports this site with a monthly subscription through Patreon."
     image_tag("patreon.png", class: "fpc-patron-tiny", title: title) if user.patron?

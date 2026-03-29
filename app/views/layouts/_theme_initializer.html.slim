@@ -1,0 +1,30 @@
+/ Apply theme as early as possible to avoid light/dark flash before deferred JS loads.
+javascript:
+  (() => {
+    const cookieKey = "fpc-theme";
+    const getSystemTheme = () =>
+      window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+
+    const getCookieTheme = () => {
+      const prefix = `${cookieKey}=`;
+      const cookie = document.cookie
+        .split(";")
+        .map((part) => part.trim())
+        .find((part) => part.startsWith(prefix));
+
+      if (!cookie) {
+        return null;
+      }
+
+      const value = cookie.slice(prefix.length);
+      return value === "dark" || value === "light" ? value : null;
+    };
+
+    const persistTheme = (theme) => {
+      document.cookie = `${cookieKey}=${theme};path=/;max-age=31536000;samesite=lax`;
+    };
+
+    const theme = getCookieTheme() || getSystemTheme();
+    document.documentElement.setAttribute("data-bs-theme", theme);
+    persistTheme(theme);
+  })();
