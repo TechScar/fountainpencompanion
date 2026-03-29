@@ -3,7 +3,12 @@ require "sidekiq-scheduler/web"
 require "sidekiq/throttled/web"
 
 Rails.application.routes.draw do
-  apipie
+  namespace "apipie", path: Apipie.configuration.doc_base_url do
+    get "apipie_checksum", to: "apipies#apipie_checksum", format: "json"
+    constraints version: %r{[^/]+}, resource: %r{[^/]+}, method: %r{[^/]+} do
+      get "(:version)/(:resource)/(:method)", to: "apipies#index", as: :apipie
+    end
+  end
   mount LetterOpenerWeb::Engine, at: "/letter_opener" if Rails.env.development?
 
   devise_for :users,
