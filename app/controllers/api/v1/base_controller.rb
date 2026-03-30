@@ -4,6 +4,7 @@ class Api::V1::BaseController < ApplicationController
   skip_forgery_protection if: :token_authentication?
 
   rescue_from ActionController::InvalidAuthenticityToken, with: :render_csrf_error
+  rescue_from Apipie::ParamError, with: :render_param_error
 
   before_action :require_json
   before_action :authenticate_via_token_or_session!
@@ -51,5 +52,9 @@ class Api::V1::BaseController < ApplicationController
              errors: [{ detail: "CSRF token verification failed" }]
            },
            status: :unprocessable_entity
+  end
+
+  def render_param_error(exception)
+    render json: { errors: [{ detail: exception.message }] }, status: :bad_request
   end
 end
