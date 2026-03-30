@@ -532,6 +532,13 @@ RSpec.describe InkClusterer do
         expect(UpdateMicroCluster.jobs.size).to eq(1)
         expect(UpdateMicroCluster.jobs.last["args"]).to eq([micro_cluster.id])
       end
+
+      it "uses a unique ink_name to avoid uniqueness violations" do
+        subject.approve!
+        cluster = micro_cluster.reload.macro_cluster
+        expect(cluster.ink_name).to be_present
+        expect(cluster.ink_name).not_to eq("")
+      end
     end
 
     context "ignore_ink action" do

@@ -234,7 +234,7 @@ class InkClusterer
       micro_cluster.update!(macro_cluster_id: agent_log.extra_data["cluster_id"])
       UpdateMicroCluster.perform_async(micro_cluster.id)
     when "create_new_cluster"
-      cluster = MacroCluster.create!
+      cluster = MacroCluster.create!(ink_name: SecureRandom.uuid)
       micro_cluster.update!(macro_cluster_id: cluster.id)
       UpdateMicroCluster.perform_async(micro_cluster.id)
     when "ignore_ink"
