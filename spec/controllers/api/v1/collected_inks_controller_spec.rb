@@ -25,5 +25,16 @@ describe Api::V1::CollectedInksController do
         expect(json_response["data"][0]["id"].to_i).to eq(ink.id)
       end
     end
+
+    context "signed in with invalid params" do
+      before(:each) { sign_in(user) }
+
+      it "returns a 400 error for invalid page parameter" do
+        get :index, params: { page: "1" }, format: :json
+        expect(response).to have_http_status(:bad_request)
+        json_response = JSON.parse(response.body)
+        expect(json_response["errors"].first["detail"]).to include("page")
+      end
+    end
   end
 end
