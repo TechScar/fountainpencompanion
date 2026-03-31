@@ -77,6 +77,7 @@ const getPage = async (page) => {
   const response = await getRequest(
     `/api/v1/currently_inked.json?filter[archived]=false&page[number]=${page}`
   );
+  if (!response.ok) throw new Error(`Request failed: ${response.status}`);
   const json = await response.json();
   return json;
 };
