@@ -1,0 +1,32 @@
+.ink-card-footer {
+  justify-content: space-between;
+}
+
+.badges {
+  display: flex;
+  flex-direction: row;
+  gap: 4px;
+  flex-wrap: wrap;
+  max-width: 220px;
+
+  .badge {
+    text-transform: capitalize;
+  }
+
+  .badge.tag {
+    text-transform: none;
+
+    &.cluster-tag {
+      opacity: 0.4;
+    }
+
+    a {
+      color: white;
+      text-decoration-line: none;
+
+      &:hover {
+        text-decoration-line: underline;
+      }
+    }
+  }
+}

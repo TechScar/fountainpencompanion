@@ -74,12 +74,12 @@ class CurrentlyInked < ApplicationRecord
     )
   end
 
-  def daily_usage_count
-    usage_records.size
-  end
-
   def refillable?
     collected_ink.active? && collected_pen.active?
+  end
+
+  def daily_usage_count
+    usage_records.size
   end
 
   def used_today?
@@ -91,7 +91,7 @@ class CurrentlyInked < ApplicationRecord
   end
 
   def name
-    "#{ink_name} - #{pen_name}"
+    "#{ink_short_name} - #{pen_name}"
   end
 
   def pen_name
@@ -121,7 +121,7 @@ class CurrentlyInked < ApplicationRecord
     user
       .active_collected_inks
       .or(CollectedInk.where(id: collected_ink_id))
-      .order("brand_name, line_name, ink_name")
+      .order(:brand_name, :line_name, :ink_name)
   end
 
   private

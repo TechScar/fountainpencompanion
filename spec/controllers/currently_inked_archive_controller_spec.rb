@@ -24,11 +24,10 @@ describe CurrentlyInkedArchiveController do
     context "signed in" do
       before(:each) { sign_in(user) }
 
-      it "renders the currently inkeds" do
+      it "renders the archive React mount" do
         get :index
         expect(response).to be_successful
-        expect(response.body).to include(collected_pen.name)
-        expect(response.body).to include(collected_ink.name)
+        expect(response.body).to include("data-archive=\"true\"")
       end
     end
   end

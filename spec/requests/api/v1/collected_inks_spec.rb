@@ -66,15 +66,14 @@ describe Api::V1::CollectedInksController do
               "ACCEPT" => "application/json"
             }
 
-        expect(json).to match(
-          data: [hash_including(attributes: hash_including(brand_name: "Pilot"))],
-          meta: {
-            pagination: {
-              total_pages: 3,
-              current_page: 2,
-              next_page: 3,
-              prev_page: 1
-            }
+        expect(json[:data].length).to eq(1)
+        expect(json[:data].first).to include(attributes: hash_including(brand_name: "Pilot"))
+        expect(json[:meta]).to eq(
+          pagination: {
+            total_pages: 3,
+            current_page: 2,
+            next_page: 3,
+            prev_page: 1
           }
         )
       end
@@ -109,6 +108,17 @@ describe Api::V1::CollectedInksController do
                 )
             )
           ]
+        )
+      end
+
+      it "includes tags in the index response by default" do
+        ink = create(:collected_ink, user: user)
+        tag = ink.tags.create!(name: "blue")
+
+        get "/api/v1/collected_inks", headers: { "ACCEPT" => "application/json" }
+
+        expect(json[:included]).to include(
+          hash_including(id: tag.id.to_s, type: "tag", attributes: hash_including(name: "blue"))
         )
       end
 

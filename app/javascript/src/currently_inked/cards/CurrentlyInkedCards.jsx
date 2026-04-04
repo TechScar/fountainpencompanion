@@ -1,27 +1,22 @@
-import React, { useState } from "react";
-import { useHiddenFields } from "../../useHiddenFields";
-import { Actions } from "../components/Actions";
-import { Cards } from "./Cards";
-import { fuzzyMatch } from "../match";
+import React from "react";
+import { SharedGridCards } from "../../components/SharedGridCards";
+import { CurrentlyInkedCard } from "./CurrentlyInkedCard";
 
-export const storageKeyHiddenFields = "fpc-currently-inked-cards-hidden-fields";
-
-export const CurrentlyInkedCards = ({ currentlyInked, onLayoutChange, onUsageRecorded }) => {
-  const { hiddenFields, onHiddenFieldsChange } = useHiddenFields(storageKeyHiddenFields);
-  const [matchOn, setMatchOn] = useState("");
-  const visible = fuzzyMatch(currentlyInked, matchOn, hiddenFields);
-
+export const CurrentlyInkedCards = ({ currentlyInked, hiddenFields, onUsageRecorded }) => {
   return (
     <div data-testid="card-layout">
-      <Actions
-        activeLayout="card"
-        numberOfEntries={currentlyInked.length}
-        onFilterChange={setMatchOn}
-        onLayoutChange={onLayoutChange}
+      <SharedGridCards
+        data={currentlyInked}
         hiddenFields={hiddenFields}
-        onHiddenFieldsChange={onHiddenFieldsChange}
+        renderCard={(row, i) => (
+          <CurrentlyInkedCard
+            key={row.id + "i" + i}
+            hiddenFields={hiddenFields}
+            onUsageRecorded={onUsageRecorded}
+            {...row}
+          />
+        )}
       />
-      <Cards data={visible} hiddenFields={hiddenFields} onUsageRecorded={onUsageRecorded} />
     </div>
   );
 };

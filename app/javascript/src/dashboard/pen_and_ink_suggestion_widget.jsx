@@ -7,7 +7,7 @@ import "./pen_and_ink_suggestion_widget.css";
 
 export const PenAndInkSuggestionWidget = ({ renderWhenInvisible }) => (
   <Widget
-    header="Pen and Ink suggestion"
+    header="Pen & Ink Suggestion"
     subtitle="Gives suggestions on what to ink next using AI™"
     renderWhenInvisible={renderWhenInvisible}
   >

@@ -1,4 +1,3 @@
-// @ts-check
 import React from "react";
 import { render } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -35,7 +34,7 @@ describe("<Actions />", () => {
 
     expect(importLink.getAttribute("href")).toEqual("/collected_inks/import");
     expect(exportLink.getAttribute("href")).toEqual("/collected_inks.csv");
-    expect(archiveLink.getAttribute("href")).toEqual("/collected_inks?search[archive]=true");
+    expect(archiveLink.getAttribute("href")).toEqual("/collected_inks/archive");
     expect(addLink.getAttribute("href")).toEqual("/collected_inks/new");
   });
 
@@ -170,6 +169,9 @@ describe("<Actions />", () => {
 
     await user.click(getByLabelText("Show tags"));
     expect(onHiddenFieldsChange).toHaveBeenCalledWith(["tags"]);
+
+    await user.click(getByLabelText("Show cluster tags"));
+    expect(onHiddenFieldsChange).toHaveBeenCalledWith(["cluster_tags"]);
   });
 
   it("calls onHiddenFieldsChange with expected result when turning switch off", async () => {
@@ -194,5 +196,30 @@ describe("<Actions />", () => {
     await user.click(getByLabelText("Show private"));
 
     expect(onHiddenFieldsChange).toHaveBeenCalledWith([]);
+  });
+
+  it("does not render links in archive mode", () => {
+    const { queryByText, queryByRole } = setup(
+      <Actions
+        archive={true}
+        activeLayout="table"
+        numberOfPens={0}
+        hiddenFields={[]}
+        onHiddenFieldsChange={() => {
+          return;
+        }}
+        onFilterChange={() => {
+          return;
+        }}
+        onLayoutChange={() => {
+          return;
+        }}
+      />
+    );
+
+    expect(queryByText("Import")).not.toBeInTheDocument();
+    expect(queryByText("Export")).not.toBeInTheDocument();
+    expect(queryByText("Archive")).not.toBeInTheDocument();
+    expect(queryByRole("link", { name: "Add ink" })).not.toBeInTheDocument();
   });
 });

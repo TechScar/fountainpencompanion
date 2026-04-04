@@ -32,7 +32,7 @@ describe("<Actions />", () => {
 
     expect(getByText("Export").href).toMatch("/collected_pens.csv");
 
-    expect(getByText("Archive").href).toMatch("/collected_pens_archive");
+    expect(getByText("Archive").href).toMatch("/collected_pens/archive");
 
     expect(getByText("Add pen").href).toMatch("/collected_pens/new");
   });
@@ -149,5 +149,30 @@ describe("<Actions />", () => {
     await user.click(getByLabelText("Show nib"));
 
     expect(onHiddenFieldsChange).toHaveBeenCalledWith([]);
+  });
+
+  it("does not render links in archive mode", () => {
+    const { queryByText, queryByRole } = setup(
+      <Actions
+        archive={true}
+        activeLayout="table"
+        numberOfPens={0}
+        hiddenFields={[]}
+        onHiddenFieldsChange={() => {
+          return;
+        }}
+        onFilterChange={() => {
+          return;
+        }}
+        onLayoutChange={() => {
+          return;
+        }}
+      />
+    );
+
+    expect(queryByText("Import")).not.toBeInTheDocument();
+    expect(queryByText("Export")).not.toBeInTheDocument();
+    expect(queryByText("Archive")).not.toBeInTheDocument();
+    expect(queryByRole("link", { name: "Add pen" })).not.toBeInTheDocument();
   });
 });

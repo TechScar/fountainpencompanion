@@ -1,8 +1,8 @@
 import React from "react";
-import { rest } from "msw";
-import { setupServer } from "msw/node";
 import { render } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { rest } from "msw";
+import { setupServer } from "msw/node";
 import { CollectedInks, storageKeyLayout } from "./CollectedInks";
 
 const setup = (jsx, options) => {
@@ -14,92 +14,107 @@ const setup = (jsx, options) => {
 
 describe("<CollectedInks />", () => {
   const server = setupServer(
-    rest.get("/collected_inks.json", (req, res, ctx) =>
-      res(
-        ctx.json({
-          data: [
-            {
-              id: "4",
-              type: "collected_ink",
-              attributes: {
-                brand_name: "Sailor",
-                line_name: "Shikiori",
-                ink_name: "Yozakura",
-                maker: "Sailor",
-                color: "#ac54b5",
-                archived_on: null,
-                comment:
-                  "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.",
-                kind: "bottle",
-                private: false,
-                private_comment:
-                  "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.",
-                simplified_brand_name: "sailor",
-                simplified_ink_name: "yozakura",
-                simplified_line_name: "shikiori",
-                swabbed: true,
-                used: true,
-                archived: false,
-                ink_id: 3,
-                usage: 2,
-                daily_usage: 1,
-                cluster_tags: []
-              },
-              relationships: {
-                micro_cluster: { data: { id: "3", type: "micro_cluster" } },
-                tags: {
-                  data: [
-                    { id: "1", type: "tag" },
-                    { id: "2", type: "tag" }
-                  ]
-                },
-                currently_inkeds: {
-                  data: [
-                    { id: "1", type: "currently_inked" },
-                    { id: "3", type: "currently_inked" }
-                  ]
-                }
-              }
+    rest.get("/api/v1/collected_inks.json", (req, res, ctx) => {
+      const archived = req.url.searchParams.get("filter[archived]");
+      const data = [
+        {
+          id: "4",
+          type: "collected_ink",
+          attributes: {
+            brand_name: "Sailor",
+            line_name: "Shikiori",
+            ink_name: "Yozakura",
+            maker: "Sailor",
+            color: "#ac54b5",
+            archived_on: null,
+            comment:
+              "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.",
+            kind: "bottle",
+            private: false,
+            private_comment:
+              "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.",
+            simplified_brand_name: "sailor",
+            simplified_ink_name: "yozakura",
+            simplified_line_name: "shikiori",
+            swabbed: true,
+            used: true,
+            archived: false,
+            ink_id: 3,
+            usage: 2,
+            daily_usage: 1,
+            cluster_tags: []
+          },
+          relationships: {
+            micro_cluster: { data: { id: "3", type: "micro_cluster" } },
+            tags: {
+              data: [
+                { id: "1", type: "tag" },
+                { id: "2", type: "tag" }
+              ]
             },
-            {
-              id: "11",
-              type: "collected_ink",
-              attributes: {
-                brand_name: "DeAtramentis",
-                line_name: "Document",
-                ink_name: "Black",
-                maker: "",
-                color: "#120e0e",
-                archived_on: "2023-02-18",
-                comment: "",
-                kind: "",
-                private: false,
-                private_comment: "",
-                simplified_brand_name: "deatramentis",
-                simplified_ink_name: "black",
-                simplified_line_name: "document",
-                swabbed: false,
-                used: false,
-                archived: true,
-                ink_id: 49,
-                usage: 0,
-                daily_usage: 0,
-                cluster_tags: []
-              },
-              relationships: {
-                micro_cluster: { data: { id: "8", type: "micro_cluster" } },
-                tags: { data: [] },
-                currently_inkeds: { data: [] }
-              }
+            currently_inkeds: {
+              data: [
+                { id: "1", type: "currently_inked" },
+                { id: "3", type: "currently_inked" }
+              ]
             }
-          ],
+          }
+        },
+        {
+          id: "11",
+          type: "collected_ink",
+          attributes: {
+            brand_name: "DeAtramentis",
+            line_name: "Document",
+            ink_name: "Black",
+            maker: "",
+            color: "#120e0e",
+            archived_on: "2023-02-18",
+            comment: "",
+            kind: "",
+            private: false,
+            private_comment: "",
+            simplified_brand_name: "deatramentis",
+            simplified_ink_name: "black",
+            simplified_line_name: "document",
+            swabbed: false,
+            used: false,
+            archived: true,
+            ink_id: 49,
+            usage: 0,
+            daily_usage: 0,
+            cluster_tags: []
+          },
+          relationships: {
+            micro_cluster: { data: { id: "8", type: "micro_cluster" } },
+            tags: { data: [] },
+            currently_inkeds: { data: [] }
+          }
+        }
+      ].filter((item) => {
+        if (archived === "true") return item.attributes.archived;
+        if (archived === "false") return !item.attributes.archived;
+        return true;
+      });
+
+      return res(
+        ctx.json({
+          data,
           included: [
             { id: "1", type: "tag", attributes: { name: "maximum" } },
             { id: "2", type: "tag", attributes: { name: "taggage" } }
-          ]
+          ],
+          meta: {
+            pagination: {
+              total_pages: 1,
+              current_page: 1,
+              next_page: null,
+              prev_page: null
+            }
+          }
         })
-      )
-    )
+      );
+    })
   );
 
   beforeAll(() => {
@@ -110,6 +125,7 @@ describe("<CollectedInks />", () => {
   afterEach(() => {
     localStorage.clear();
     server.resetHandlers();
+    jest.restoreAllMocks();
   });
 
   afterAll(() => server.close());
@@ -154,5 +170,161 @@ describe("<CollectedInks />", () => {
     expect(result).toBeTruthy();
     // Does not show unarchived when archive=true
     expect(queryByText("Yozakura")).not.toBeInTheDocument();
+  });
+
+  it("shows the empty collection alert only after loading active inks", async () => {
+    server.use(
+      rest.get("/api/v1/collected_inks.json", (req, res, ctx) => {
+        const archived = req.url.searchParams.get("filter[archived]");
+        return res(
+          ctx.json({
+            data:
+              archived === "false"
+                ? []
+                : [
+                    {
+                      id: "11",
+                      type: "collected_ink",
+                      attributes: {
+                        brand_name: "DeAtramentis",
+                        line_name: "Document",
+                        ink_name: "Black",
+                        maker: "",
+                        color: "#120e0e",
+                        archived_on: "2023-02-18",
+                        comment: "",
+                        kind: "",
+                        private: false,
+                        private_comment: "",
+                        simplified_brand_name: "deatramentis",
+                        simplified_ink_name: "black",
+                        simplified_line_name: "document",
+                        swabbed: false,
+                        used: false,
+                        archived: true,
+                        ink_id: 49,
+                        usage: 0,
+                        daily_usage: 0,
+                        cluster_tags: []
+                      },
+                      relationships: {
+                        micro_cluster: { data: { id: "8", type: "micro_cluster" } },
+                        tags: { data: [] },
+                        currently_inkeds: { data: [] }
+                      }
+                    }
+                  ],
+            included: [],
+            meta: {
+              pagination: {
+                total_pages: 1,
+                current_page: 1,
+                next_page: null,
+                prev_page: null
+              }
+            }
+          })
+        );
+      })
+    );
+
+    const { queryByText, findByText, getByTitle } = setup(<CollectedInks archive={false} />);
+
+    expect(queryByText("Your ink collection is empty.")).not.toBeInTheDocument();
+    await findByText("Your ink collection is empty.", { exact: false });
+    expect(queryByText("Brand")).not.toBeInTheDocument();
+    expect(getByTitle("Card layout")).toBeInTheDocument();
+  });
+
+  it("shows the empty archive alert only after loading archived inks", async () => {
+    server.use(
+      rest.get("/api/v1/collected_inks.json", (req, res, ctx) => {
+        const archived = req.url.searchParams.get("filter[archived]");
+        return res(
+          ctx.json({
+            data:
+              archived === "true"
+                ? []
+                : [
+                    {
+                      id: "4",
+                      type: "collected_ink",
+                      attributes: {
+                        brand_name: "Sailor",
+                        line_name: "Shikiori",
+                        ink_name: "Yozakura",
+                        maker: "Sailor",
+                        color: "#ac54b5",
+                        archived_on: null,
+                        comment: "",
+                        kind: "bottle",
+                        private: false,
+                        private_comment: "",
+                        simplified_brand_name: "sailor",
+                        simplified_ink_name: "yozakura",
+                        simplified_line_name: "shikiori",
+                        swabbed: true,
+                        used: true,
+                        archived: false,
+                        ink_id: 3,
+                        usage: 2,
+                        daily_usage: 1,
+                        cluster_tags: []
+                      },
+                      relationships: {
+                        micro_cluster: { data: { id: "3", type: "micro_cluster" } },
+                        tags: { data: [] },
+                        currently_inkeds: { data: [] }
+                      }
+                    }
+                  ],
+            included: [],
+            meta: {
+              pagination: {
+                total_pages: 1,
+                current_page: 1,
+                next_page: null,
+                prev_page: null
+              }
+            }
+          })
+        );
+      })
+    );
+
+    const { queryByText, findByText, getByTitle } = setup(<CollectedInks archive={true} />);
+
+    expect(queryByText("Your ink archive is empty.")).not.toBeInTheDocument();
+    await findByText("Your ink archive is empty.");
+    expect(queryByText("Brand")).not.toBeInTheDocument();
+    expect(getByTitle("Card layout")).toBeInTheDocument();
+  });
+
+  it("falls back to empty state when the request fails", async () => {
+    server.use(rest.get("/api/v1/collected_inks.json", (req, res, ctx) => res(ctx.status(500))));
+
+    const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+
+    const { queryByText, findByText, getByTitle } = setup(<CollectedInks archive={false} />);
+
+    expect(queryByText("Your ink collection is empty.")).not.toBeInTheDocument();
+    await findByText("Your ink collection is empty.", { exact: false });
+    expect(queryByText("Brand")).not.toBeInTheDocument();
+    expect(getByTitle("Card layout")).toBeInTheDocument();
+    expect(errorSpy).toHaveBeenCalled();
+  });
+
+  it("falls back to archive empty state when the request fails", async () => {
+    server.use(rest.get("/api/v1/collected_inks.json", (req, res, ctx) => res(ctx.status(500))));
+
+    const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+
+    const { queryByText, findByText, getByTitle } = setup(<CollectedInks archive={true} />);
+
+    expect(queryByText("Your ink archive is empty.")).not.toBeInTheDocument();
+    await findByText("Your ink archive is empty.");
+    expect(queryByText("Brand")).not.toBeInTheDocument();
+    expect(getByTitle("Card layout")).toBeInTheDocument();
+    expect(errorSpy).toHaveBeenCalled();
   });
 });

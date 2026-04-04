@@ -3,6 +3,7 @@ require "sidekiq-scheduler/web"
 require "sidekiq/throttled/web"
 
 Rails.application.routes.draw do
+  # API documentation and development-only tooling
   namespace "apipie", path: Apipie.configuration.doc_base_url do
     get "apipie_checksum", to: "apipies#apipie_checksum", format: "json"
     constraints version: %r{[^/]+}, resource: %r{[^/]+}, method: %r{[^/]+} do
@@ -11,12 +12,14 @@ Rails.application.routes.draw do
   end
   mount LetterOpenerWeb::Engine, at: "/letter_opener" if Rails.env.development?
 
+  # Authentication and session management
   devise_for :users,
              controllers: {
                registrations: "users/registrations",
                sessions: "custom_sessions"
              }
 
+  # Public pages and dashboard widgets
   resource :dashboard, only: [:show] do
     resources :widgets, only: [:show]
   end
@@ -25,38 +28,50 @@ Rails.application.routes.draw do
     collection { get "feed", defaults: { format: "rss" } }
   end
 
+  # User collection management (inks, pens, currently inked, usage)
   resources :reading_statuses, only: [:update]
-  resources :collected_inks, only: %i[index edit update new create destroy] do
+
+  # Collected inks management
+  resources :collected_inks, only: %i[index new create edit update] do
     collection { get "import" }
-    member do
-      post "archive"
-      post "unarchive"
-    end
+    member { post "archive" }
+  end
+  resources :collected_inks_archive,
+            path: "collected_inks/archive",
+            only: %i[index edit update destroy] do
+    member { post "unarchive" }
   end
   namespace :collected_inks do
     resources :add, only: [:create]
   end
 
-  resources :collected_pens, only: %i[index edit update new create] do
+  # Collected pens management
+  resources :collected_pens, only: %i[index new create edit update] do
     collection { get "import" }
     member { post "archive" }
   end
-  resources :collected_pens_archive, only: %i[index edit update destroy] do
+  resources :collected_pens_archive,
+            path: "collected_pens/archive",
+            only: %i[index edit update destroy] do
     member { post "unarchive" }
   end
-  resources :currently_inked do
+
+  # Currently inked management, including usage record
+  resources :currently_inked, only: %i[index new create edit update] do
     member do
-      post "archive"
       post "refill"
+      post "archive"
     end
     resource :usage_record, only: [:create]
   end
-  resources :currently_inked_archive, only: %i[index edit update destroy] do
+  resources :currently_inked_archive,
+            path: "currently_inked/archive",
+            only: %i[index edit update destroy] do
     member { post "unarchive" }
   end
+  resources :usage_records, only: %i[index destroy]
 
-  resources :usage_records, only: %i[index destroy edit update]
-
+  # Ink and pen catalog browsing/editing
   resources :brands, only: %i[index edit update show] do
     resource :history, only: [:show]
     resources :inks, only: %i[show edit update] do
@@ -88,6 +103,7 @@ Rails.application.routes.draw do
   resource :account_deletion, only: %i[create show destroy]
   resources :authentication_tokens, only: %i[index create destroy]
 
+  # Public user profiles and contribution queues
   resources :users, only: %i[index show]
 
   resources :reviews, only: [] do
@@ -104,6 +120,7 @@ Rails.application.routes.draw do
     end
   end
 
+  # Public JSON API endpoints
   namespace :api do
     namespace :v1 do
       resources :brands, only: %i[index show]
@@ -114,6 +131,7 @@ Rails.application.routes.draw do
     end
   end
 
+  # Administrative interface and moderation tools
   namespace :admins do
     resource :dashboard, only: [:show]
     resources :agent_logs, only: [:index]
@@ -169,10 +187,12 @@ Rails.application.routes.draw do
     end
   end
 
+  # Admin-only mounted dashboards
   authenticate :user, ->(user) { user.admin? } do
     mount Sidekiq::Web => "/admins/sidekiq"
     mount PgHero::Engine, at: "/admins/pghero"
   end
 
+  # Site homepage
   root "pages#show", id: "home"
 end

@@ -1,4 +1,3 @@
-// @ts-check
 import React from "react";
 import { render } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -125,5 +124,110 @@ describe("<SwabCard />", () => {
 
     const link = container.querySelector('a[href="/inks/42"]');
     expect(link).toBeInTheDocument();
+  });
+
+  it("shows archive actions for archived entries", () => {
+    const { getByTitle, queryByTitle } = setup(
+      <CurrentlyInkedCard
+        id="1"
+        archived={true}
+        ink_name="Black"
+        inked_on="2023-06-19"
+        pen_name="Pilot Metropolitan"
+        refillable={false}
+        unarchivable={true}
+        used_today={false}
+        collected_ink={{
+          id: "1",
+          color: "#000",
+          micro_cluster: {
+            id: "1"
+          }
+        }}
+        collected_pen={{
+          id: "1"
+        }}
+        hiddenFields={[]}
+      />
+    );
+
+    expect(getByTitle("Edit 'Pilot Metropolitan - Black'").getAttribute("href")).toBe(
+      "/currently_inked/archive/1/edit"
+    );
+    expect(getByTitle("Unarchive 'Pilot Metropolitan - Black'").getAttribute("href")).toBe(
+      "/currently_inked/archive/1/unarchive"
+    );
+    expect(getByTitle("Delete 'Pilot Metropolitan - Black'").getAttribute("href")).toBe(
+      "/currently_inked/archive/1"
+    );
+    expect(queryByTitle("archive")).not.toBeInTheDocument();
+  });
+
+  it("shows non-archived actions and links for active entries", () => {
+    const { getByTitle, queryByTitle, getAllByRole } = setup(
+      <CurrentlyInkedCard
+        id="1"
+        archived={false}
+        ink_name="Black"
+        inked_on="2023-06-19"
+        pen_name="Pilot Metropolitan"
+        refillable={true}
+        used_today={false}
+        collected_ink={{
+          id: "1",
+          color: "#000",
+          micro_cluster: {
+            macro_cluster: { id: "9" }
+          }
+        }}
+        collected_pen={{
+          id: "1",
+          model_variant_id: "42"
+        }}
+        hiddenFields={[]}
+      />
+    );
+
+    expect(getByTitle("Refill 'Pilot Metropolitan - Black'").getAttribute("href")).toBe(
+      "/currently_inked/1/refill"
+    );
+    expect(getByTitle("Edit 'Pilot Metropolitan - Black'").getAttribute("href")).toBe(
+      "/currently_inked/1/edit"
+    );
+    expect(getByTitle("Archive 'Pilot Metropolitan - Black'").getAttribute("href")).toBe(
+      "/currently_inked/1/archive"
+    );
+    expect(queryByTitle("Unarchive 'Pilot Metropolitan - Black'")).not.toBeInTheDocument();
+
+    const links = getAllByRole("link").map((node) => node.getAttribute("href"));
+    expect(links).toContain("/inks/9");
+    expect(links).toContain("/pen_variants/42");
+  });
+
+  it("hides refill action when pen is not refillable", () => {
+    const { queryByTitle } = setup(
+      <CurrentlyInkedCard
+        id="1"
+        archived={false}
+        ink_name="Black"
+        inked_on="2023-06-19"
+        pen_name="Pilot Metropolitan"
+        refillable={false}
+        used_today={false}
+        collected_ink={{
+          id: "1",
+          color: "#000",
+          micro_cluster: {
+            id: "1"
+          }
+        }}
+        collected_pen={{
+          id: "1"
+        }}
+        hiddenFields={[]}
+      />
+    );
+
+    expect(queryByTitle("Refill 'Pilot Metropolitan - Black'")).not.toBeInTheDocument();
   });
 });

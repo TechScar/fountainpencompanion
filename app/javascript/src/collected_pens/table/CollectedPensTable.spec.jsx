@@ -1,8 +1,7 @@
-// @ts-check
 import React from "react";
-import { render, act, waitFor } from "@testing-library/react";
+import { render } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { CollectedPensTable, storageKeyHiddenFields } from "./CollectedPensTable";
+import { CollectedPensTable } from "./CollectedPensTable";
 
 const setup = (jsx, options) => {
   return {
@@ -10,6 +9,8 @@ const setup = (jsx, options) => {
     ...render(jsx, options)
   };
 };
+
+const noop = () => {};
 
 describe("<CollectedPensTable />", () => {
   const pens = [
@@ -51,18 +52,9 @@ describe("<CollectedPensTable />", () => {
     }
   ];
 
-  beforeEach(() => {
-    localStorage.clear();
-  });
-
   it("renders the pens", () => {
     const { queryByText } = setup(
-      <CollectedPensTable
-        pens={pens}
-        onLayoutChange={() => {
-          return;
-        }}
-      />
+      <CollectedPensTable pens={pens} hiddenFields={[]} onHiddenFieldsChange={noop} />
     );
     expect(queryByText("Loom")).toBeDefined();
     expect(queryByText("Ambition")).toBeDefined();
@@ -71,38 +63,33 @@ describe("<CollectedPensTable />", () => {
 
   it("renders the action buttons", () => {
     const { getAllByTitle } = setup(
-      <CollectedPensTable
-        pens={pens}
-        onLayoutChange={() => {
-          return;
-        }}
-      />
+      <CollectedPensTable pens={pens} hiddenFields={[]} onHiddenFieldsChange={noop} />
     );
-    expect(getAllByTitle("edit")).toHaveLength(3);
-    expect(getAllByTitle("archive")).toHaveLength(3);
+    expect(getAllByTitle("Edit 'Faber-Castell Loom'")).toHaveLength(1);
+    expect(getAllByTitle("Edit 'Faber-Castell Ambition'")).toHaveLength(1);
+    expect(getAllByTitle("Edit 'Majohn Q1'")).toHaveLength(1);
+    expect(getAllByTitle("Archive 'Faber-Castell Loom'")).toHaveLength(1);
   });
 
   it("renders the correct footers", () => {
     const { queryByText } = setup(
-      <CollectedPensTable
-        pens={pens}
-        onLayoutChange={() => {
-          return;
-        }}
-      />
+      <CollectedPensTable pens={pens} hiddenFields={[]} onHiddenFieldsChange={noop} />
     );
     expect(queryByText("2 brands")).toBeDefined();
     expect(queryByText("3 pens")).toBeDefined();
   });
 
+  it("hides columns specified in hiddenFields prop", () => {
+    const { queryByText } = setup(
+      <CollectedPensTable pens={pens} hiddenFields={["usage"]} onHiddenFieldsChange={noop} />
+    );
+
+    expect(queryByText("Usage")).not.toBeInTheDocument();
+  });
+
   it("sorts descending for the usage column", async () => {
     const { getAllByRole, user } = setup(
-      <CollectedPensTable
-        pens={pens}
-        onLayoutChange={() => {
-          return;
-        }}
-      />
+      <CollectedPensTable pens={pens} hiddenFields={[]} onHiddenFieldsChange={noop} />
     );
     const headerCell = getAllByRole("columnheader").find(
       (e) => e.innerHTML.includes("Usage") && !e.innerHTML.includes("Daily Usage")
@@ -113,21 +100,14 @@ describe("<CollectedPensTable />", () => {
     }
 
     await user.click(headerCell);
-    // Highest usage value
     expect(getAllByRole("row")[1]).toHaveTextContent(/Q1/);
     await user.click(headerCell);
-    // Lowest usage value
     expect(getAllByRole("row")[1]).toHaveTextContent(/Ambition/);
   });
 
   it("sorts descending for the daily usage column", async () => {
     const { getAllByRole, user } = setup(
-      <CollectedPensTable
-        pens={pens}
-        onLayoutChange={() => {
-          return;
-        }}
-      />
+      <CollectedPensTable pens={pens} hiddenFields={[]} onHiddenFieldsChange={noop} />
     );
     const headerCell = getAllByRole("columnheader").find((e) =>
       e.innerHTML.includes("Daily Usage")
@@ -138,135 +118,14 @@ describe("<CollectedPensTable />", () => {
     }
 
     await user.click(headerCell);
-    // Highest usage value
     expect(getAllByRole("row")[1]).toHaveTextContent(/Loom/);
     await user.click(headerCell);
-    // Lowest usage value
     expect(getAllByRole("row")[1]).toHaveTextContent(/Ambition/);
-  });
-
-  it("updates hidden fields when clicked", async () => {
-    const { getByTitle, getByLabelText, queryByText, user } = setup(
-      <CollectedPensTable
-        pens={pens}
-        onLayoutChange={() => {
-          return;
-        }}
-      />
-    );
-
-    expect(queryByText("Usage")).toBeInTheDocument();
-
-    await user.click(getByTitle("Configure visible fields"));
-    await user.click(getByLabelText("Show usage"));
-
-    expect(queryByText("Usage")).not.toBeInTheDocument();
-  });
-
-  it("resets hidden fields when restore defaults is clicked", async () => {
-    const { getByText, getByTitle, getByLabelText, queryByText, user } = setup(
-      <CollectedPensTable
-        pens={pens}
-        onLayoutChange={() => {
-          return;
-        }}
-      />
-    );
-
-    await user.click(getByTitle("Configure visible fields"));
-    await user.click(getByLabelText("Show usage"));
-
-    expect(queryByText("Usage")).not.toBeInTheDocument();
-
-    await user.click(getByText("Restore defaults"));
-
-    expect(queryByText("Usage")).toBeInTheDocument();
-  });
-
-  it("renders with hidden fields restored from localStorage", () => {
-    localStorage.setItem(storageKeyHiddenFields, JSON.stringify(["usage"]));
-
-    const { queryByText } = setup(
-      <CollectedPensTable
-        pens={pens}
-        onLayoutChange={() => {
-          return;
-        }}
-      />
-    );
-
-    expect(queryByText("Usage")).not.toBeInTheDocument();
-  });
-
-  it("global filter reduces visible rows", async () => {
-    jest.useFakeTimers();
-    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
-    try {
-      const { getByLabelText, container } = render(
-        <CollectedPensTable
-          pens={pens}
-          onLayoutChange={() => {
-            return;
-          }}
-        />
-      );
-
-      await user.type(getByLabelText("Search"), "Majohn");
-      await act(async () => {
-        jest.runAllTimers();
-      });
-
-      await waitFor(() => {
-        const rows = container.querySelectorAll("tbody tr");
-        expect(rows.length).toBe(1);
-      });
-
-      expect(container).toHaveTextContent("Q1");
-    } finally {
-      jest.useRealTimers();
-    }
-  });
-
-  it("footer counts update after filtering", async () => {
-    jest.useFakeTimers();
-    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
-    try {
-      const { getByLabelText, getByText } = render(
-        <CollectedPensTable
-          pens={pens}
-          onLayoutChange={() => {
-            return;
-          }}
-        />
-      );
-
-      // Initially shows all counts
-      expect(getByText("2 brands")).toBeInTheDocument();
-      expect(getByText("3 pens")).toBeInTheDocument();
-
-      // Filter to only Majohn
-      await user.type(getByLabelText("Search"), "Majohn");
-      await act(async () => {
-        jest.runAllTimers();
-      });
-
-      await waitFor(() => {
-        expect(getByText("1 brands")).toBeInTheDocument();
-        expect(getByText("1 pens")).toBeInTheDocument();
-      });
-    } finally {
-      jest.useRealTimers();
-    }
   });
 
   it("null usage values sort correctly", async () => {
     const { getAllByRole, user } = setup(
-      <CollectedPensTable
-        pens={pens}
-        onLayoutChange={() => {
-          return;
-        }}
-      />
+      <CollectedPensTable pens={pens} hiddenFields={[]} onHiddenFieldsChange={noop} />
     );
 
     const headerCell = getAllByRole("columnheader").find(
@@ -277,17 +136,15 @@ describe("<CollectedPensTable />", () => {
       throw new Error("Could not find header cell");
     }
 
-    // First click: sort descending (highest first)
     await user.click(headerCell);
     const rowsDesc = getAllByRole("row");
-    expect(rowsDesc[1]).toHaveTextContent(/Q1/); // usage: 5
+    expect(rowsDesc[1]).toHaveTextContent(/Q1/);
 
-    // Second click: sort ascending (lowest first, nulls appear first in react-table v7)
     await user.click(headerCell);
     const rowsAsc = getAllByRole("row");
-    expect(rowsAsc[1]).toHaveTextContent(/Ambition/); // usage: null (nulls sort first in ascending)
-    expect(rowsAsc[2]).toHaveTextContent(/Loom/); // usage: 1
-    expect(rowsAsc[3]).toHaveTextContent(/Q1/); // usage: 5
+    expect(rowsAsc[1]).toHaveTextContent(/Ambition/);
+    expect(rowsAsc[2]).toHaveTextContent(/Loom/);
+    expect(rowsAsc[3]).toHaveTextContent(/Q1/);
   });
 
   it("brand counting with varied data", () => {
@@ -310,25 +167,18 @@ describe("<CollectedPensTable />", () => {
     const { getByText } = setup(
       <CollectedPensTable
         pens={pensWithDuplicateBrands}
-        onLayoutChange={() => {
-          return;
-        }}
+        hiddenFields={[]}
+        onHiddenFieldsChange={noop}
       />
     );
 
-    // Should still be 2 brands (Faber-Castell and Majohn)
     expect(getByText("2 brands")).toBeInTheDocument();
     expect(getByText("4 pens")).toBeInTheDocument();
   });
 
   it("comment column renders correctly", () => {
     const { container } = setup(
-      <CollectedPensTable
-        pens={pens}
-        onLayoutChange={() => {
-          return;
-        }}
-      />
+      <CollectedPensTable pens={pens} hiddenFields={[]} onHiddenFieldsChange={noop} />
     );
 
     expect(container).toHaveTextContent("some comment");
@@ -336,12 +186,7 @@ describe("<CollectedPensTable />", () => {
 
   it("sorting multiple times toggles direction correctly", async () => {
     const { getAllByRole, user } = setup(
-      <CollectedPensTable
-        pens={pens}
-        onLayoutChange={() => {
-          return;
-        }}
-      />
+      <CollectedPensTable pens={pens} hiddenFields={[]} onHiddenFieldsChange={noop} />
     );
 
     const headerCell = getAllByRole("columnheader").find((e) => e.innerHTML.includes("Brand"));
@@ -350,17 +195,14 @@ describe("<CollectedPensTable />", () => {
       throw new Error("Could not find Brand header cell");
     }
 
-    // First click: ascending
     await user.click(headerCell);
     let rows = getAllByRole("row");
     expect(rows[1]).toHaveTextContent(/Faber-Castell/);
 
-    // Second click: descending
     await user.click(headerCell);
     rows = getAllByRole("row");
     expect(rows[1]).toHaveTextContent(/Majohn/);
 
-    // Third click: unsorted (back to original order)
     await user.click(headerCell);
     rows = getAllByRole("row");
     expect(rows[1]).toHaveTextContent(/Loom/);
@@ -368,12 +210,7 @@ describe("<CollectedPensTable />", () => {
 
   it("model variant link renders when model_variant_id exists", () => {
     const { container } = setup(
-      <CollectedPensTable
-        pens={pens}
-        onLayoutChange={() => {
-          return;
-        }}
-      />
+      <CollectedPensTable pens={pens} hiddenFields={[]} onHiddenFieldsChange={noop} />
     );
 
     const modelLinks = container.querySelectorAll('a[href*="/pen_variants/"]');
@@ -384,18 +221,11 @@ describe("<CollectedPensTable />", () => {
 
   it("model renders without link when model_variant_id is null", () => {
     const { container, getByText } = setup(
-      <CollectedPensTable
-        pens={pens}
-        onLayoutChange={() => {
-          return;
-        }}
-      />
+      <CollectedPensTable pens={pens} hiddenFields={[]} onHiddenFieldsChange={noop} />
     );
 
-    // Check that Ambition (which has null model_variant_id) renders without link
     expect(getByText("Ambition")).toBeInTheDocument();
 
-    // Count links - should only have 2 (for Loom and Q1)
     const modelLinks = container.querySelectorAll('a[href*="/pen_variants/"]');
     expect(modelLinks.length).toBe(2);
   });

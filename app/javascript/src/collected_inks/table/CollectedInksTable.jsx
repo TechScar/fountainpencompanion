@@ -1,22 +1,12 @@
-import React, { useEffect, useMemo, useState } from "react";
-import {
-  useReactTable,
-  getCoreRowModel,
-  getSortedRowModel,
-  flexRender
-} from "@tanstack/react-table";
 import _ from "lodash";
+import React, { useMemo } from "react";
+import { ColorSwatchCell } from "../../components/ColorSwatchCell";
 import { RelativeDate } from "../../components/RelativeDate";
-import { useHiddenFields } from "../../useHiddenFields";
-import { Actions } from "../components";
-import { fuzzyMatch } from "../match";
-import { Counter } from "./Counter";
-import { InkWithLink } from "./InkWithLink";
-import { Table } from "../../components/Table";
-import { booleanSort, colorSort, dateSort } from "./sort";
+import { renderCountFooter, SharedGridTable } from "../../components/SharedGridTable";
+import { WithLink } from "../../components/WithLink";
 import { ActionsCell } from "./ActionsCell";
-
-export const storageKeyHiddenFields = "fpc-collected-inks-table-hidden-fields";
+import { Counter } from "./Counter";
+import { booleanSort, colorSort, dateSort } from "./sort";
 
 function fixedEncodeURIComponent(str) {
   return encodeURIComponent(str).replace(/[!'()*]/g, function (c) {
@@ -24,7 +14,7 @@ function fixedEncodeURIComponent(str) {
   });
 }
 
-export const CollectedInksTable = ({ data, archive, onLayoutChange }) => {
+export const CollectedInksTable = ({ inks, hiddenFields, onHiddenFieldsChange }) => {
   const columns = useMemo(
     () => [
       {
@@ -44,7 +34,7 @@ export const CollectedInksTable = ({ data, archive, onLayoutChange }) => {
         footer: ({ table }) => {
           const rows = table.getFilteredRowModel().rows;
           const count = _.uniqBy(rows, (row) => row.original.brand_name).length;
-          return <span>{count} brands</span>;
+          return renderCountFooter(count, "brand");
         }
       },
       {
@@ -54,9 +44,12 @@ export const CollectedInksTable = ({ data, archive, onLayoutChange }) => {
       {
         header: "Name",
         accessorKey: "ink_name",
-        cell: ({ getValue, row }) => <InkWithLink value={getValue()} row={row} />,
+        cell: ({ getValue, row }) => {
+          const ink_id = row.original.ink_id;
+          return <WithLink href={ink_id ? `/inks/${ink_id}` : null}>{getValue()}</WithLink>;
+        },
         footer: ({ table }) => {
-          return <span>{table.getFilteredRowModel().rows.length} inks</span>;
+          return renderCountFooter(table.getFilteredRowModel().rows.length, "ink");
         }
       },
       {
@@ -82,18 +75,7 @@ export const CollectedInksTable = ({ data, archive, onLayoutChange }) => {
       {
         header: "Color",
         accessorKey: "color",
-        cell: ({ getValue }) => {
-          const value = getValue();
-          return (
-            <div
-              style={{
-                backgroundColor: value,
-                width: "45px",
-                height: "45px"
-              }}
-            ></div>
-          );
-        },
+        cell: ({ getValue }) => <ColorSwatchCell value={getValue()} />,
         sortingFn: colorSort
       },
       {
@@ -157,7 +139,7 @@ export const CollectedInksTable = ({ data, archive, onLayoutChange }) => {
         accessorKey: "tags",
         cell: ({ getValue }) => {
           const value = getValue();
-          if (!value.length) return null;
+          if (!Array.isArray(value) || value.length === 0) return null;
           return (
             <ul className="tags">
               {value.map((tag) => (
@@ -175,7 +157,7 @@ export const CollectedInksTable = ({ data, archive, onLayoutChange }) => {
         cell: ({ getValue, row }) => {
           const value = getValue();
           const tags = row.original.tags || [];
-          if (!value.length) return null;
+          if (!Array.isArray(value) || value.length === 0) return null;
           const clusterOnlyTags = _.difference(
             value,
             tags.map((t) => t.name)
@@ -202,169 +184,12 @@ export const CollectedInksTable = ({ data, archive, onLayoutChange }) => {
     []
   );
 
-  const defaultHiddenFields = useMemo(() => {
-    let hideIfNoInksWithValue = [
-      "private",
-      "private_comment",
-      "comment",
-      "maker",
-      "line_name",
-      "kind",
-      "daily_usage",
-      "last_used_on"
-    ].filter((n) => !data.some((e) => e[n]));
-
-    if (data.every((e) => e.tags.length == 0)) {
-      hideIfNoInksWithValue.push("tags");
-    }
-    if (data.every((e) => e.cluster_tags.length == 0)) {
-      hideIfNoInksWithValue.push("cluster_tags");
-    }
-    return hideIfNoInksWithValue;
-  }, [data]);
-
-  const { hiddenFields, onHiddenFieldsChange } = useHiddenFields(
-    storageKeyHiddenFields,
-    defaultHiddenFields
-  );
-
-  const [filterText, setFilterText] = useState("");
-
-  const filteredData = useMemo(
-    () => fuzzyMatch(data, filterText, hiddenFields),
-    [data, filterText, hiddenFields]
-  );
-
-  const table = useReactTable({
-    columns,
-    data: filteredData,
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    state: {
-      columnVisibility: hiddenFields.reduce((acc, field) => ({ ...acc, [field]: false }), {})
-    },
-    onColumnVisibilityChange: (updater) => {
-      if (typeof updater === "function") {
-        const newVisibility = updater(
-          hiddenFields.reduce((acc, field) => ({ ...acc, [field]: false }), {})
-        );
-        const newHiddenFields = Object.keys(newVisibility).filter((key) => !newVisibility[key]);
-        onHiddenFieldsChange(newHiddenFields);
-      }
-    }
-  });
-
-  const setGlobalFilter = (value) => setFilterText(value || "");
-
-  useEffect(() => {
-    const visibility = hiddenFields.reduce((acc, field) => ({ ...acc, [field]: false }), {});
-    table.setColumnVisibility(visibility);
-  }, [hiddenFields, table]);
-
-  // Extract table props for backward compatibility with Table component
-  const getTableProps = () => ({ role: "table" });
-  const getTableBodyProps = () => ({ role: "rowgroup" });
-
-  // Add backward compatibility methods to v8 objects
-  const headerGroups = table.getHeaderGroups().map((headerGroup) => ({
-    ...headerGroup,
-    getHeaderGroupProps: () => ({ role: "row" }),
-    headers: headerGroup.headers.map((header) => ({
-      ...header,
-      getHeaderProps: (userProps = {}) => {
-        const metaClass = header.column.columnDef?.meta?.className;
-        const mergedClassName = [userProps.className, metaClass].filter(Boolean).join(" ");
-        const baseStyle =
-          metaClass === "fpc-actions-column" ? { width: "1%", whiteSpace: "nowrap" } : {};
-        const sortableStyle = header.column.getCanSort()
-          ? { cursor: "pointer", userSelect: "none", WebkitUserSelect: "none" }
-          : {};
-        const style = { ...baseStyle, ...sortableStyle };
-        const title = header.column.getCanSort() ? "Toggle SortBy" : undefined;
-        return {
-          ...userProps,
-          className: mergedClassName,
-          style,
-          role: "columnheader",
-          colSpan: 1,
-          title
-        };
-      },
-      getSortByToggleProps: () => ({
-        onClick: header.column.getToggleSortingHandler?.()
-      }),
-      getIsSorted: () => header.column.getIsSorted?.(),
-      isSorted: header.column.getIsSorted?.() ? true : false,
-      isSortedDesc: header.column.getIsSorted?.() === "desc",
-      render: (type) => {
-        if (type === "Header") {
-          return flexRender(header.column.columnDef.header, header.getContext());
-        }
-        return null;
-      }
-    }))
-  }));
-
-  const footerGroups = table.getFooterGroups().map((footerGroup) => ({
-    ...footerGroup,
-    getFooterGroupProps: () => ({ role: "row" }),
-    headers: footerGroup.headers.map((header) => ({
-      ...header,
-      getFooterProps: () => {
-        const metaClass = header.column.columnDef?.meta?.className;
-        const style =
-          metaClass === "fpc-actions-column" ? { width: "1%", whiteSpace: "nowrap" } : undefined;
-        return metaClass
-          ? { className: metaClass, style, role: "columnheader", colSpan: 1 }
-          : { style, role: "columnheader", colSpan: 1 };
-      },
-      render: (type) => {
-        if (type === "Footer") {
-          return flexRender(header.column.columnDef.footer, header.getContext());
-        }
-        return null;
-      }
-    }))
-  }));
-
-  const rows = table.getRowModel().rows.map((row) => ({
-    ...row,
-    getRowProps: () => ({ role: "row" }),
-    cells: row.getVisibleCells().map((cell) => ({
-      ...cell,
-      getCellProps: () => {
-        const metaClass = cell.column.columnDef?.meta?.className;
-        const style =
-          metaClass === "fpc-actions-column" ? { width: "1%", whiteSpace: "nowrap" } : undefined;
-        return metaClass
-          ? { className: metaClass, style, role: "cell", colSpan: 1 }
-          : { style, role: "cell", colSpan: 1 };
-      }
-    }))
-  }));
-
-  const prepareRow = () => {};
-
   return (
-    <div>
-      <Actions
-        archive={archive}
-        activeLayout="table"
-        numberOfInks={data.length}
-        onFilterChange={setGlobalFilter}
-        onLayoutChange={onLayoutChange}
-        hiddenFields={hiddenFields}
-        onHiddenFieldsChange={onHiddenFieldsChange}
-      />
-      <Table
-        hiddenFields={hiddenFields}
-        getTableProps={getTableProps}
-        headerGroups={headerGroups}
-        getTableBodyProps={getTableBodyProps}
-        rows={rows}
-        prepareRow={prepareRow}
-        footerGroups={footerGroups}
-      />
-    </div>
+    <SharedGridTable
+      columns={columns}
+      data={inks}
+      hiddenFields={hiddenFields}
+      onHiddenFieldsChange={onHiddenFieldsChange}
+    />
   );
 };

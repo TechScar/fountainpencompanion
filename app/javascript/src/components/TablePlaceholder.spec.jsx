@@ -21,5 +21,6 @@ describe("<TablePlaceholder />", () => {
     placeholder = queryByTestId("table-placeholder");
     expect(placeholder).not.toBeNull();
     expect(placeholder).toBeVisible();
+    expect(queryByTestId("toolbar-placeholder")).toBeVisible();
   });
 });

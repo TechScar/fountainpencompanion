@@ -1,25 +1,18 @@
 import React from "react";
-import { render, act } from "@testing-library/react";
-import { CardsPlaceholder } from "./CardsPlaceholder";
+import { render } from "@testing-library/react";
+import { CardPlaceholder } from "./CardPlaceholder";
 
-describe("<CardsPlaceholder />", () => {
-  beforeEach(() => {
-    jest.useFakeTimers();
-  });
+describe("<CardPlaceholder />", () => {
+  it("renders placeholder sections for title, text, and actions", () => {
+    const { container } = render(<CardPlaceholder />);
 
-  afterEach(() => {
-    jest.useRealTimers();
-  });
+    const placeholders = container.querySelectorAll(".placeholder");
+    expect(placeholders).toHaveLength(5);
 
-  it("only renders after a delay of 250ms", async () => {
-    const { queryByTestId } = render(<CardsPlaceholder />);
-    let placeholder = queryByTestId("cards-placeholder");
-    expect(placeholder).toBeNull();
+    const primaryAction = container.querySelector(".placeholder.col-4.bg-primary");
+    const secondaryAction = container.querySelector(".placeholder.col-2.bg-secondary");
 
-    act(() => jest.advanceTimersByTime(251));
-
-    placeholder = queryByTestId("cards-placeholder");
-    expect(placeholder).not.toBeNull();
-    expect(placeholder).toBeVisible();
+    expect(primaryAction).toBeInTheDocument();
+    expect(secondaryAction).toBeInTheDocument();
   });
 });

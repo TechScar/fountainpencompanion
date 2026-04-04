@@ -42,8 +42,8 @@
           = render partial: "leaderboard_row", locals: { user_data: user_data }
       p= link_to "Show all", page_path("brands_leaderboard")
     div class="col-sm-12 col-md-6 fpc-leaderboards__board"
-      h2 class="h4" Currently inked
-      p.text-muted Ranked by the number of currently inked entries
+      h2 class="h4" Currently Inked
+      p.text-muted Ranked by the number of 'Currently Inked' entries
       ol
         - LeaderBoard.top_currently_inked.each do |user_data|
           = render partial: "leaderboard_row", locals: { user_data: user_data }
@@ -51,14 +51,14 @@
 
   div.row.mb-3
     div class="col-sm-12 col-md-6 fpc-leaderboards__board"
-      h2 class="h4" Usage records
+      h2 class="h4" Usage Records
       p.text-muted Ranked by the number of usage records
       ol
         - LeaderBoard.top_usage_records.each do |user_data|
           = render partial: "leaderboard_row", locals: { user_data: user_data }
       p= link_to "Show all", page_path("usage_records_leaderboard")
     div class="col-sm-12 col-md-6 fpc-leaderboards__board"
-      h2 class="h4" Review submissions
+      h2 class="h4" Review Submissions
       p.text-muted Ranked by the number of reviews submitted
       ol
         - LeaderBoard.top_ink_review_submissions.each do |user_data|
@@ -67,14 +67,14 @@
 
   div.row.mb-3
     div class="col-sm-12 col-md-6 fpc-leaderboards__board"
-      h2 class="h4" Brand and ink edits
+      h2 class="h4" Brand & Ink Edits
       p.text-muted Ranked by the number of edits made to brand and ink names, ink colors, and  descriptions
       ol
         - LeaderBoard.top_users_by_description_edits.each do |user_data|
           = render partial: "leaderboard_row", locals: { user_data: user_data }
       p= link_to "Show all", page_path("users_by_description_edits_leaderboard")
     div class="col-sm-12 col-md-6 fpc-leaderboards__board"
-      h2 class="h4" Popular inks
+      h2 class="h4" Popular Inks
       p.text-muted Ranked by number of people who own this
       ol
         - LeaderBoard.top_inks_by_popularity.each do |macro_cluster|
@@ -88,7 +88,7 @@
 
   div.row.mb-3
     div class="col-sm-12 col-md-6 fpc-leaderboards__board"
-      h2 class="h4" Popular pens
+      h2 class="h4" Popular Pens
       p.text-muted Ranked by number of people who own this
       ol
         - LeaderBoard.top_pens_by_popularity.each do |pen|

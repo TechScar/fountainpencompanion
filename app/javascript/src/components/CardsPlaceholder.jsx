@@ -2,6 +2,7 @@ import React from "react";
 import { useDelayedRender } from "../useDelayedRender";
 import { CardPlaceholder } from "./CardPlaceholder";
 import "./cards.scss";
+import { ToolbarPlaceholder } from "./ToolbarPlaceholder";
 
 export const CardsPlaceholder = () => {
   const shouldRender = useDelayedRender(250);
@@ -11,11 +12,14 @@ export const CardsPlaceholder = () => {
   }
 
   return (
-    <div data-testid="cards-placeholder" className="fpc-placeholder-cards">
-      <CardPlaceholder />
-      <CardPlaceholder />
-      <CardPlaceholder />
-      <CardPlaceholder />
+    <div className="placeholder-glow" data-testid="cards-placeholder">
+      <ToolbarPlaceholder />
+      <div className="fpc-placeholder-cards">
+        <CardPlaceholder />
+        <CardPlaceholder />
+        <CardPlaceholder />
+        <CardPlaceholder />
+      </div>
     </div>
   );
 };

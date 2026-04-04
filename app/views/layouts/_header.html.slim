@@ -33,12 +33,12 @@ nav class="fpc-header navbar navbar-dark navbar-expand-lg" id="header"
       ul class="navbar-nav me-auto mb-2 mb-lg-0 align-self-right"
         - if user_signed_in?
           li= link_to "Dashboard", dashboard_path, class: "nav-link"
-          li= link_to "Currently inked", currently_inked_index_path, class: "nav-link"
+          li= link_to "Currently Inked", currently_inked_index_path, class: "nav-link"
           li class="nav-item dropdown"
-            a href="#" class="nav-link dropdown-toggle" role="button" data-bs-toggle="dropdown" aria-expanded="false" My collection
+            a href="#" class="nav-link dropdown-toggle" role="button" data-bs-toggle="dropdown" aria-expanded="false" My Collection
             ul class="dropdown-menu"
-              li= link_to "My pens", collected_pens_path, class: "dropdown-item"
-              li= link_to "My inks", collected_inks_path, class: "dropdown-item"
+              li= link_to "My Pens", collected_pens_path, class: "dropdown-item"
+              li= link_to "My Inks", collected_inks_path, class: "dropdown-item"
 
 
 
@@ -50,10 +50,10 @@ nav class="fpc-header navbar navbar-dark navbar-expand-lg" id="header"
               li
                 hr class="dropdown-divider"
                 span class="dropdown-header" Archives
-              li= link_to "Inks", "/collected_inks?search[archive]=true", class: "dropdown-item"
+              li= link_to "Inks", collected_inks_archive_index_path, class: "dropdown-item"
               li= link_to "Pens", collected_pens_archive_index_path, class: "dropdown-item"
-              li= link_to "Currently inked", currently_inked_archive_index_path, class: "dropdown-item"
-              li= link_to "Usage records", usage_records_path, class: "dropdown-item"
+              li= link_to "Currently Inked", currently_inked_archive_index_path, class: "dropdown-item"
+              li= link_to "Usage Records", usage_records_path, class: "dropdown-item"
               li
                 hr class="dropdown-divider"
               li= link_to "Log out", destroy_user_session_path, method: :delete, class: "dropdown-item"

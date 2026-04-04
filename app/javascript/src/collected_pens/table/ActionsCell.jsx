@@ -1,19 +1,20 @@
 import React from "react";
+import { CollectionEntryActions } from "../../components";
 
-export const ActionsCell = ({ id }) => {
+export const ActionsCell = ({ id, archived, brand, model }) => {
+  let name = [brand, model].filter(Boolean).join(" ");
+  if (archived) name += " (archived)";
+
+  const editHref = archived ? `/collected_pens/archive/${id}/edit` : `/collected_pens/${id}/edit`;
+
   return (
-    <div className="actions">
-      <a className="btn btn-secondary" title="edit" href={`/collected_pens/${id}/edit`}>
-        <i className="fa fa-pencil" />
-      </a>
-      <a
-        className="btn btn-secondary"
-        title="archive"
-        href={`/collected_pens/${id}/archive`}
-        data-method="post"
-      >
-        <i className="fa fa-archive" />
-      </a>
-    </div>
+    <CollectionEntryActions
+      archived={archived}
+      name={name}
+      editHref={editHref}
+      archiveHref={`/collected_pens/${id}/archive`}
+      unarchiveHref={`/collected_pens/archive/${id}/unarchive`}
+      deleteHref={`/collected_pens/archive/${id}`}
+    />
   );
 };

@@ -1,13 +1,13 @@
 - if archive?
-  - content_for :title, "Ink archive"
+  - content_for :title, "Ink Archive"
   - content_for :breadcrumbs
     ol class="breadcrumb"
       li class="breadcrumb-item"
-        = link_to "Inks", collected_inks_path
+        = link_to "My Inks", collected_inks_path
       li class="breadcrumb-item active" aria-current="page"
         | Archive
 - else
-  - content_for :title, "Inks"
+  - content_for :title, "My Inks"
 
 - unless cookies["my-inks-help-add-reviews"]
   - if current_user.inks_without_reviews?

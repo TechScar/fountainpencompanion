@@ -29,7 +29,7 @@ class Api::V1::CollectedInksController < Api::V1::BaseController
   end
   param :include,
         String,
-        desc: "Comma-separated list of related resources to include (e.g., 'macro_cluster')"
+        desc: "Comma-separated list of related resources to include (e.g., 'macro_cluster,tags')"
   returns code: 200, desc: "A list of collected inks" do
     property :data, array_of: Hash do
       property :id, String, desc: "ID of the collected ink"
@@ -77,6 +77,22 @@ class Api::V1::CollectedInksController < Api::V1::BaseController
             property :type, ["currently_inked"]
           end
         end
+      end
+    end
+    property :included, array_of: Hash, required: false do
+      property :id, String, desc: "ID of the included resource"
+      property :type, String, desc: "Type of the included resource"
+      property :attributes,
+               Hash,
+               desc: "Attributes of the included resource",
+               required: false,
+               default_value: {
+               } do
+        property :name,
+                 String,
+                 desc: "Name of the included tag",
+                 required: false,
+                 default_value: nil
       end
     end
     property :meta, Hash do
@@ -284,12 +300,16 @@ class Api::V1::CollectedInksController < Api::V1::BaseController
       meta: {
         pagination: pagination
       },
-      include: includes
+      include: index_includes
     }
   end
 
+  def index_includes
+    (includes + ["tags"]).uniq
+  end
+
   def includes
-    includes_whitelist = ["macro_cluster"]
+    includes_whitelist = %w[macro_cluster tags]
     requested_includes = params[:include].to_s.split(",").map(&:strip)
     requested_includes & includes_whitelist
   end

@@ -1,6 +1,6 @@
 import React from "react";
+import { CollectionEntryActions, pluralizedCountLabel } from "../../components";
 import { Card } from "../../components/Card";
-import "./pen-card.scss";
 import { RelativeDate } from "../../components/RelativeDate";
 
 /**
@@ -26,6 +26,7 @@ import { RelativeDate } from "../../components/RelativeDate";
  */
 export const PenCard = (props) => {
   const {
+    archived,
     hiddenFields,
     id,
     brand,
@@ -45,12 +46,13 @@ export const PenCard = (props) => {
   } = props;
 
   const fullName = `${brand} ${model}`;
+
   const isVisible = (field) => props[field] && !hiddenFields.includes(field);
   const hasUsage = isVisible("usage") || isVisible("daily_usage") || isVisible("last_used_on");
 
   return (
-    <Card className="fpc-pen-card">
-      <Card.Body>
+    <Card>
+      <Card.Header>
         <Card.Title>
           {fullName}
           {model_variant_id && (
@@ -62,6 +64,8 @@ export const PenCard = (props) => {
             </>
           )}
         </Card.Title>
+      </Card.Header>
+      <Card.Body>
         {isVisible("comment") ? <Card.Text>{comment}</Card.Text> : null}
         {isVisible("color") ? (
           <>
@@ -104,7 +108,7 @@ export const PenCard = (props) => {
             <div className="small text-secondary">Usage</div>
             <Card.Text data-testid="usage">
               {String(usage)} inked - <LastUsageDisplay last_used_on={last_used_on} /> (
-              {String(daily_usage)} daily usages)
+              {pluralizedCountLabel(daily_usage, "daily usage")})
             </Card.Text>
           </>
         ) : null}
@@ -114,22 +118,17 @@ export const PenCard = (props) => {
             <Card.Text>{<RelativeDate date={created_at} relativeAsDefault={false} />}</Card.Text>
           </>
         ) : null}
-        <div className="fpc-pen-card__footer">
-          <div className="fpc-pen-card__actions">
-            <a className="btn btn-secondary me-2" title="edit" href={`/collected_pens/${id}/edit`}>
-              <i className="fa fa-pencil" />
-            </a>
-            <a
-              className="btn btn-secondary"
-              title="archive"
-              href={`/collected_pens/${id}/archive`}
-              data-method="post"
-            >
-              <i className="fa fa-archive" />
-            </a>
-          </div>
-        </div>
       </Card.Body>
+      <Card.Footer>
+        <CollectionEntryActions
+          archived={archived}
+          name={fullName}
+          editHref={archived ? `/collected_pens/archive/${id}/edit` : `/collected_pens/${id}/edit`}
+          archiveHref={`/collected_pens/${id}/archive`}
+          unarchiveHref={`/collected_pens/archive/${id}/unarchive`}
+          deleteHref={`/collected_pens/archive/${id}`}
+        />
+      </Card.Footer>
     </Card>
   );
 };

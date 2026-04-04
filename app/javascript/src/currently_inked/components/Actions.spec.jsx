@@ -1,4 +1,3 @@
-// @ts-check
 import React from "react";
 import { render } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -15,6 +14,7 @@ describe("<Actions />", () => {
   it("shows the expected links", async () => {
     const { getAllByRole } = render(
       <Actions
+        archive={false}
         activeLayout="table"
         numberOfEntries={0}
         hiddenFields={[]}
@@ -33,14 +33,37 @@ describe("<Actions />", () => {
 
     expect(exportLink.getAttribute("href")).toEqual("/currently_inked.csv");
     expect(usageLink.getAttribute("href")).toEqual("/usage_records");
-    expect(archiveLink.getAttribute("href")).toEqual("/currently_inked_archive");
+    expect(archiveLink.getAttribute("href")).toEqual("/currently_inked/archive");
     expect(addLink.getAttribute("href")).toEqual("/currently_inked/new");
+  });
+
+  it("shows no links or add button in archive mode", () => {
+    const { queryAllByRole } = render(
+      <Actions
+        archive={true}
+        activeLayout="table"
+        numberOfEntries={0}
+        hiddenFields={[]}
+        onHiddenFieldsChange={() => {
+          return;
+        }}
+        onFilterChange={() => {
+          return;
+        }}
+        onLayoutChange={() => {
+          return;
+        }}
+      />
+    );
+
+    expect(queryAllByRole("link")).toHaveLength(0);
   });
 
   it("calls onFilterChange on change for the filter input field", async () => {
     const onFilterChange = jest.fn();
     const { user, getByRole } = setup(
       <Actions
+        archive={false}
         activeLayout="table"
         numberOfEntries={0}
         hiddenFields={[]}
@@ -64,6 +87,7 @@ describe("<Actions />", () => {
     const onFilterChange = jest.fn();
     const { user, getByRole } = setup(
       <Actions
+        archive={false}
         activeLayout="table"
         numberOfEntries={0}
         hiddenFields={[]}
@@ -117,6 +141,9 @@ describe("<Actions />", () => {
 
     await user.click(getByLabelText("Show last used"));
     expect(onHiddenFieldsChange).toHaveBeenCalledWith(["last_used_on"]);
+
+    await user.click(getByLabelText("Show usage"));
+    expect(onHiddenFieldsChange).toHaveBeenCalledWith(["daily_usage"]);
   });
 
   it("calls onHiddenFieldsChange with expected result when turning switch off", async () => {

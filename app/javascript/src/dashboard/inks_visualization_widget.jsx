@@ -5,7 +5,7 @@ import { colorSort } from "../color-sorting";
 import { Widget, WidgetDataContext, WidgetWidthContext } from "./widgets";
 
 export const InksVisualizationWidget = ({ renderWhenInvisible }) => (
-  <Widget header={"Ink visualization"} path={dataPath} renderWhenInvisible={renderWhenInvisible}>
+  <Widget header={"Ink Visualization"} path={dataPath} renderWhenInvisible={renderWhenInvisible}>
     <InksVisualizationWidgetContent />
   </Widget>
 );

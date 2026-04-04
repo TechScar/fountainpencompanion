@@ -1,83 +1,53 @@
-import React, { useState, useEffect, useCallback } from "react";
-import Jsona from "jsona";
-import { getRequest } from "../fetch";
+import _ from "lodash";
+import React from "react";
+import {
+  CollectionLoadingPlaceholder,
+  shouldUseCardLayout
+} from "../components/CollectionLoadingPlaceholder";
+import { CollectionListPageShell } from "../components/CollectionListPageShell";
 import { useLayout } from "../useLayout";
 import { useScreen } from "../useScreen";
-import { CardsPlaceholder } from "../components/CardsPlaceholder";
-import { TablePlaceholder } from "../components/TablePlaceholder";
-import { CurrentlyInkedCards } from "./cards/CurrentlyInkedCards";
-import { CurrentlyInkedTable } from "./table/CurrentlyInkedTable";
-import _ from "lodash";
-
-const formatter = new Jsona();
+import { CurrentlyInkedContent } from "./CurrentlyInkedContent";
 
 export const storageKeyLayout = "fpc-currently-inked-layout";
 
-export const CurrentlyInked = () => {
-  const [currentlyInked, setCurrentlyInked] = useState();
-
-  useEffect(() => {
-    async function getData() {
-      // Hack to keep the default sort order of the table and the card view the same.
-      // Will eventually (ha!) be replaced by a sorting capability for the card view.
-      const data = await getCurrentlyInked();
-      setCurrentlyInked(_.sortBy(data, "pen_name"));
-    }
-    getData().catch(() => {});
-  }, []);
-
-  const updateEntry = useCallback((updatedEntry) => {
-    setCurrentlyInked((prev) =>
-      prev.map((entry) => (entry.id === updatedEntry.id ? updatedEntry : entry))
-    );
-  }, []);
-
+export const CurrentlyInked = ({ archive }) => {
   const screen = useScreen();
   const { layout, onLayoutChange } = useLayout(storageKeyLayout);
+  const showCards = shouldUseCardLayout(layout, screen.isSmall);
 
-  if (layout ? layout === "card" : screen.isSmall) {
-    if (currentlyInked) {
-      return (
-        <CurrentlyInkedCards
-          currentlyInked={currentlyInked}
-          onLayoutChange={onLayoutChange}
-          onUsageRecorded={updateEntry}
-        />
-      );
-    } else {
-      return <CardsPlaceholder />;
-    }
-  } else {
-    if (currentlyInked) {
-      return (
-        <CurrentlyInkedTable
-          currentlyInked={currentlyInked}
-          onLayoutChange={onLayoutChange}
-          onUsageRecorded={updateEntry}
-        />
-      );
-    } else {
-      return <TablePlaceholder />;
-    }
-  }
-};
+  const endpoint = archive
+    ? "/api/v1/currently_inked.json?filter[archived]=true"
+    : "/api/v1/currently_inked.json?filter[archived]=false";
 
-const getCurrentlyInked = async () => {
-  let receivedCurrentlyInked = [];
-  let page = 1;
-  do {
-    const json = await getPage(page);
-    page = json.meta?.pagination?.next_page;
-    receivedCurrentlyInked.push(...formatter.deserialize(json));
-  } while (page);
-  return receivedCurrentlyInked;
-};
+  const loadingComponent = <CollectionLoadingPlaceholder showCards={showCards} />;
 
-const getPage = async (page) => {
-  const response = await getRequest(
-    `/api/v1/currently_inked.json?filter[archived]=false&page[number]=${page}`
+  return (
+    <CollectionListPageShell
+      endpoint={endpoint}
+      loadingComponent={loadingComponent}
+      paginated
+      // Hack to keep the default sort order of the table and the card view the same.
+      // Will eventually (ha!) be replaced by a sorting capability for the card view.
+      postProcess={(items) => _.sortBy(items, "pen_name")}
+    >
+      {(currentlyInked, setCurrentlyInked) => {
+        const updateEntry = (updatedEntry) => {
+          setCurrentlyInked((prev) =>
+            prev.map((entry) => (entry.id === updatedEntry.id ? updatedEntry : entry))
+          );
+        };
+
+        return (
+          <CurrentlyInkedContent
+            currentlyInked={currentlyInked}
+            archive={archive}
+            showCards={showCards}
+            onLayoutChange={onLayoutChange}
+            onUsageRecorded={updateEntry}
+          />
+        );
+      }}
+    </CollectionListPageShell>
   );
-  if (!response.ok) throw new Error(`Request failed: ${response.status}`);
-  const json = await response.json();
-  return json;
 };

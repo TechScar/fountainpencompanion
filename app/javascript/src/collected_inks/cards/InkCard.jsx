@@ -1,0 +1,155 @@
+import _ from "lodash";
+import React from "react";
+import { Card, CollectionEntryActions, pluralizedCountLabel } from "../../components";
+import { RelativeDate } from "../../components/RelativeDate";
+import "./ink-card.scss";
+
+function fixedEncodeURIComponent(str) {
+  return encodeURIComponent(str).replace(/[!'()*]/g, function (c) {
+    return "%" + c.charCodeAt(0).toString(16);
+  });
+}
+
+/**
+ * @param {{
+ *    hiddenFields: string[];
+ *    archived: boolean;
+ *    id: string;
+ *    ink_id?: string;
+ *    private?: boolean;
+ *    brand_name: string;
+ *    line_name?: string;
+ *    ink_name: string;
+ *    maker?: string;
+ *    kind?: "bottle" | "sample" | "cartridge" | "swab";
+ *    color?: string;
+ *    swabbed?: boolean;
+ *    used?: boolean;
+ *    usage?: number;
+ *    daily_usage?: number;
+ *    last_used_on?: string;
+ *    comment?: string;
+ *    private_comment?: string;
+ *    created_at?: string;
+ *    tags?: Array<{ id: string; name: string }>;
+ * }} props
+ */
+export const InkCard = (props) => {
+  const {
+    archived,
+    id,
+    ink_id,
+    private: isPrivate = false,
+    maker,
+    kind,
+    color,
+    usage = 0,
+    daily_usage = 0,
+    comment,
+    private_comment,
+    tags = [],
+    cluster_tags = [],
+    last_used_on,
+    created_at,
+    hiddenFields
+  } = props;
+
+  const fullName = ["brand_name", "line_name", "ink_name"].map((a) => props[a]).join(" ");
+
+  const isVisible = (field) => props[field] && !hiddenFields.includes(field);
+  const hasUsage = isVisible("usage") || isVisible("daily_usage") || isVisible("last_used_on");
+
+  return (
+    <Card>
+      {color && <Card.Image className="swab" style={{ "--swab-color": color }} />}
+      <Card.Header>
+        <Card.Title>
+          {fullName}
+          {ink_id && (
+            <>
+              &nbsp;
+              <a href={`/inks/${ink_id}`}>
+                <i className="fa fa-external-link" />
+              </a>
+            </>
+          )}
+        </Card.Title>
+      </Card.Header>
+      <Card.Body>
+        {isVisible("comment") ? <Card.Text>{comment}</Card.Text> : null}
+        {isVisible("private_comment") ? (
+          <>
+            <div className="small text-secondary">Private comment</div>
+            <Card.Text>{private_comment}</Card.Text>
+          </>
+        ) : null}
+        {isVisible("maker") ? (
+          <>
+            <div className="small text-secondary">Maker</div>
+            <Card.Text>{maker}</Card.Text>
+          </>
+        ) : null}
+        {hasUsage ? (
+          <>
+            <div className="small text-secondary">Usage</div>
+            <Card.Text data-testid="usage">
+              {String(usage)} inked - <LastUsageDisplay last_used_on={last_used_on} /> (
+              {pluralizedCountLabel(daily_usage, "daily usage")})
+            </Card.Text>
+          </>
+        ) : null}
+        {isVisible("created_at") ? (
+          <>
+            <div className="small text-secondary">Added On</div>
+            <Card.Text>{<RelativeDate date={created_at} relativeAsDefault={false} />}</Card.Text>
+          </>
+        ) : null}
+      </Card.Body>
+      <Card.Footer className="ink-card-footer">
+        <div className="badges">
+          {isPrivate ? <span className="badge text-bg-info">Private</span> : null}
+          {isVisible("swabbed") ? <span className="badge text-bg-success">Swabbed</span> : null}
+          {isVisible("used") ? <span className="badge text-bg-success">Used</span> : null}
+          {isVisible("kind") ? <span className="badge text-bg-secondary">{kind}</span> : null}
+          {isVisible("tags") && Array.isArray(tags)
+            ? tags.map(({ id, name }) => (
+                <span key={`ink-tag-${id}`} className="tag badge text-bg-secondary">
+                  <a href={`/inks?tag=${fixedEncodeURIComponent(name)}`}>{name}</a>
+                </span>
+              ))
+            : null}
+          {isVisible("cluster_tags") && Array.isArray(cluster_tags)
+            ? _.difference(
+                cluster_tags,
+                tags.map((t) => t.name)
+              ).map((tag) => (
+                <span key={`ink-tag-${tag}`} className="tag badge text-bg-secondary cluster-tag">
+                  <a href={`/inks?tag=${fixedEncodeURIComponent(tag)}`}>{tag}</a>
+                </span>
+              ))
+            : null}
+        </div>
+        <CollectionEntryActions
+          archived={archived}
+          name={fullName}
+          editHref={archived ? `/collected_inks/archive/${id}/edit` : `/collected_inks/${id}/edit`}
+          archiveHref={`/collected_inks/${id}/archive`}
+          unarchiveHref={`/collected_inks/archive/${id}/unarchive`}
+          deleteHref={`/collected_inks/${id}`}
+        />
+      </Card.Footer>
+    </Card>
+  );
+};
+
+const LastUsageDisplay = ({ last_used_on }) => {
+  if (last_used_on) {
+    return (
+      <>
+        last used <RelativeDate date={last_used_on} />
+      </>
+    );
+  } else {
+    return <>never used</>;
+  }
+};

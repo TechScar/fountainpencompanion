@@ -25,35 +25,6 @@
   .row {
     box-shadow: none;
   }
-  .table {
-    i {
-      font-size: 18px;
-      margin: 0;
-      &.fa-check {
-        color: b.$success;
-      }
-      &.fa-times {
-        color: b.$secondary;
-      }
-    }
-    th {
-      white-space: nowrap;
-      &[role="columnheader"] {
-        &:hover {
-          background-color: var(--fpc-bright-background);
-        }
-      }
-    }
-    tbody td {
-      vertical-align: middle;
-    }
-    tfoot {
-      font-weight: bold;
-      .counter {
-        white-space: nowrap;
-      }
-    }
-  }
 }
 
 form.edit_collected_ink,
@@ -82,26 +53,4 @@ form.new_collected_ink {
 .pick-kind {
   display: flex;
   gap: 5px;
-}
-
-ul.tags {
-  list-style: none;
-  padding: 0px;
-  display: inline-flex;
-  flex-direction: row;
-  flex-wrap: wrap;
-  gap: 4px;
-
-  .cluster-tag {
-    opacity: 0.4;
-  }
-
-  a {
-    color: white;
-    text-decoration-line: none;
-
-    &:hover {
-      text-decoration-line: underline;
-    }
-  }
 }

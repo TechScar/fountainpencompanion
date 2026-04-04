@@ -1,11 +1,11 @@
-- content_for :title, "Currently inked leaderboard"
+- content_for :title, "Currently Inked Leaderboard"
 
 - content_for :breadcrumbs
   ol class="breadcrumb"
     li class="breadcrumb-item"
       = link_to "Leaderboards", page_path("leaderboards")
     li class="breadcrumb-item active" aria-current="page"
-      | Currently inked leaderboard
+      | Currently Inked Leaderboard
 
 = cache params[:id], expires_in: 1.hour do
   ol class="fpc-leaderboard"

@@ -1,7 +1,7 @@
 import React from "react";
-import { render, act, waitFor } from "@testing-library/react";
+import { render } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { CurrentlyInkedTable, storageKeyHiddenFields } from "./CurrentlyInkedTable";
+import { CurrentlyInkedTable } from "./CurrentlyInkedTable";
 
 const setup = (jsx, options) => {
   return {
@@ -9,6 +9,8 @@ const setup = (jsx, options) => {
     ...render(jsx, options)
   };
 };
+
+const noop = () => {};
 
 describe("<CurrentlyInkedTable />", () => {
   const currentlyInked = [
@@ -56,17 +58,12 @@ describe("<CurrentlyInkedTable />", () => {
     }
   ];
 
-  beforeEach(() => {
-    localStorage.clear();
-  });
-
   it("renders", async () => {
     const { findByText } = setup(
       <CurrentlyInkedTable
         currentlyInked={currentlyInked}
-        onLayoutChange={() => {
-          return;
-        }}
+        hiddenFields={[]}
+        onHiddenFieldsChange={noop}
       />
     );
 
@@ -75,53 +72,12 @@ describe("<CurrentlyInkedTable />", () => {
     expect(result).toBeInTheDocument();
   });
 
-  it("updates hidden fields when clicked", async () => {
-    const { getByTitle, getByLabelText, queryByText, user } = setup(
-      <CurrentlyInkedTable
-        currentlyInked={currentlyInked}
-        onLayoutChange={() => {
-          return;
-        }}
-      />
-    );
-
-    expect(queryByText("Pen")).toBeInTheDocument();
-
-    await user.click(getByTitle("Configure visible fields"));
-    await user.click(getByLabelText("Show pen"));
-
-    expect(queryByText("Pen")).not.toBeInTheDocument();
-  });
-
-  it("resets hidden fields when restore defaults is clicked", async () => {
-    const { getByText, getByTitle, getByLabelText, queryByText, user } = setup(
-      <CurrentlyInkedTable
-        currentlyInked={currentlyInked}
-        onLayoutChange={() => {
-          return;
-        }}
-      />
-    );
-
-    await user.click(getByTitle("Configure visible fields"));
-    await user.click(getByLabelText("Show pen"));
-
-    expect(queryByText("Pen")).not.toBeInTheDocument();
-
-    await user.click(getByText("Restore defaults"));
-
-    expect(queryByText("Pen")).toBeInTheDocument();
-  });
-
-  it("renders with hidden fields restored from localStorage", () => {
-    localStorage.setItem(storageKeyHiddenFields, JSON.stringify(["pen_name"]));
-
+  it("hides columns specified in hiddenFields prop", () => {
     const { queryByText } = setup(
       <CurrentlyInkedTable
         currentlyInked={currentlyInked}
-        onLayoutChange={() => {
-          return;
-        }}
+        hiddenFields={["pen_name"]}
+        onHiddenFieldsChange={noop}
       />
     );
 
@@ -132,9 +88,8 @@ describe("<CurrentlyInkedTable />", () => {
     const { container } = setup(
       <CurrentlyInkedTable
         currentlyInked={currentlyInked}
-        onLayoutChange={() => {
-          return;
-        }}
+        hiddenFields={[]}
+        onHiddenFieldsChange={noop}
       />
     );
 
@@ -146,15 +101,12 @@ describe("<CurrentlyInkedTable />", () => {
     const { container } = setup(
       <CurrentlyInkedTable
         currentlyInked={currentlyInked}
-        onLayoutChange={() => {
-          return;
-        }}
+        hiddenFields={[]}
+        onHiddenFieldsChange={noop}
       />
     );
 
-    const colorDivs = Array.from(container.querySelectorAll("div")).filter(
-      (div) => div.style.backgroundColor && div.style.width === "45px"
-    );
+    const colorDivs = container.querySelectorAll(".color-swatch-cell");
 
     expect(colorDivs.length).toBe(2);
     expect(colorDivs[0].style.backgroundColor).toBeTruthy();
@@ -165,9 +117,8 @@ describe("<CurrentlyInkedTable />", () => {
     const { container } = setup(
       <CurrentlyInkedTable
         currentlyInked={currentlyInked}
-        onLayoutChange={() => {
-          return;
-        }}
+        hiddenFields={[]}
+        onHiddenFieldsChange={noop}
       />
     );
 
@@ -180,9 +131,8 @@ describe("<CurrentlyInkedTable />", () => {
     const { container, getByText } = setup(
       <CurrentlyInkedTable
         currentlyInked={currentlyInked}
-        onLayoutChange={() => {
-          return;
-        }}
+        hiddenFields={[]}
+        onHiddenFieldsChange={noop}
       />
     );
 
@@ -195,9 +145,8 @@ describe("<CurrentlyInkedTable />", () => {
     const { getByText } = setup(
       <CurrentlyInkedTable
         currentlyInked={currentlyInked}
-        onLayoutChange={() => {
-          return;
-        }}
+        hiddenFields={[]}
+        onHiddenFieldsChange={noop}
       />
     );
 
@@ -234,9 +183,8 @@ describe("<CurrentlyInkedTable />", () => {
     const { getByText, container, user } = setup(
       <CurrentlyInkedTable
         currentlyInked={dataWithNulls}
-        onLayoutChange={() => {
-          return;
-        }}
+        hiddenFields={[]}
+        onHiddenFieldsChange={noop}
       />
     );
 
@@ -245,70 +193,5 @@ describe("<CurrentlyInkedTable />", () => {
     const rows = container.querySelectorAll("tbody tr");
     expect(rows.length).toBe(3);
     expect(container).toHaveTextContent("Pilot Custom 823, Amber, M");
-  });
-
-  it("global filter reduces visible rows", async () => {
-    jest.useFakeTimers();
-    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
-    try {
-      const { getByLabelText, container } = render(
-        <CurrentlyInkedTable
-          currentlyInked={currentlyInked}
-          onLayoutChange={() => {
-            return;
-          }}
-        />
-      );
-
-      await user.type(getByLabelText("Search"), "Platinum");
-      await act(async () => {
-        jest.runAllTimers();
-      });
-
-      await waitFor(() => {
-        const rows = container.querySelectorAll("tbody tr");
-        expect(rows.length).toBe(1);
-      });
-
-      expect(container).toHaveTextContent("Platinum #3776 Century, Black Diamond, F");
-    } finally {
-      jest.useRealTimers();
-    }
-  });
-
-  it("filter persists during sort", async () => {
-    jest.useFakeTimers();
-    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
-    try {
-      const { getByLabelText, getByText, container } = render(
-        <CurrentlyInkedTable
-          currentlyInked={currentlyInked}
-          onLayoutChange={() => {
-            return;
-          }}
-        />
-      );
-
-      await user.type(getByLabelText("Search"), "Platinum");
-      await act(async () => {
-        jest.runAllTimers();
-      });
-
-      await waitFor(() => {
-        const rows = container.querySelectorAll("tbody tr");
-        expect(rows.length).toBe(1);
-      });
-
-      await user.click(getByText("Pen"));
-
-      await waitFor(() => {
-        const rows = container.querySelectorAll("tbody tr");
-        expect(rows.length).toBe(1);
-      });
-
-      expect(container).toHaveTextContent("Platinum #3776 Century, Black Diamond, F");
-    } finally {
-      jest.useRealTimers();
-    }
   });
 });

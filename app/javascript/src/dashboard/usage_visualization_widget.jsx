@@ -96,7 +96,7 @@ export const UsageVisualizationWidget = ({ renderWhenInvisible }) => {
   const path = `/dashboard/widgets/usage_visualization.json?range=${range}`;
 
   return (
-    <Widget header="Usage visualization" path={path} renderWhenInvisible={renderWhenInvisible}>
+    <Widget header="Usage Visualization" path={path} renderWhenInvisible={renderWhenInvisible}>
       <UsageVisualizationWidgetContent
         range={range}
         setRange={setRange}

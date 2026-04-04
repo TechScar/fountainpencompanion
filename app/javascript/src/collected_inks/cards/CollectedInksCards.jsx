@@ -1,28 +1,15 @@
-import React, { useState } from "react";
-import { useHiddenFields } from "../../useHiddenFields";
-import { Actions } from "../components";
-import { Cards } from "./Cards";
-import { fuzzyMatch } from "../match";
+import React from "react";
+import { SharedGridCards } from "../../components/SharedGridCards";
+import { InkCard } from "./InkCard";
 
-export const storageKeyHiddenFields = "fpc-collected-inks-cards-hidden-fields";
-
-export const CollectedInksCards = ({ data, archive, onLayoutChange }) => {
-  const { hiddenFields, onHiddenFieldsChange } = useHiddenFields(storageKeyHiddenFields);
-  const [matchOn, setMatchOn] = useState("");
-  const visible = fuzzyMatch(data, matchOn, hiddenFields);
-
+export const CollectedInksCards = ({ inks, hiddenFields }) => {
   return (
-    <div>
-      <Actions
-        archive={archive}
-        activeLayout="card"
-        numberOfInks={data.length}
-        onFilterChange={setMatchOn}
-        onLayoutChange={onLayoutChange}
-        hiddenFields={hiddenFields}
-        onHiddenFieldsChange={onHiddenFieldsChange}
-      />
-      <Cards data={visible} hiddenFields={hiddenFields} />
-    </div>
+    <SharedGridCards
+      data={inks}
+      hiddenFields={hiddenFields}
+      renderCard={(row, i) => (
+        <InkCard key={row.id + "i" + i} hiddenFields={hiddenFields} {...row} />
+      )}
+    />
   );
 };

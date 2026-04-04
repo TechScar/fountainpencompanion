@@ -1,12 +1,9 @@
-// @ts-check
 import React from "react";
 import { render } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import { CurrentlyInkedCards, storageKeyHiddenFields } from "./CurrentlyInkedCards";
+import { CurrentlyInkedCards } from "./CurrentlyInkedCards";
 
 const setup = (jsx, options) => {
   return {
-    user: userEvent.setup(),
     ...render(jsx, options)
   };
 };
@@ -33,17 +30,12 @@ describe("<CurrentlyInkedCards />", () => {
     }
   ];
 
-  beforeEach(() => {
-    localStorage.clear();
-  });
-
   it("renders", async () => {
     const { findByText } = setup(
       <CurrentlyInkedCards
         currentlyInked={currentlyInked}
-        onLayoutChange={() => {
-          return;
-        }}
+        hiddenFields={[]}
+        onUsageRecorded={() => {}}
       />
     );
 
@@ -52,53 +44,12 @@ describe("<CurrentlyInkedCards />", () => {
     expect(result).toBeInTheDocument();
   });
 
-  it("updates hidden fields when clicked", async () => {
-    const { getByTitle, getByLabelText, queryByText, user } = setup(
-      <CurrentlyInkedCards
-        currentlyInked={currentlyInked}
-        onLayoutChange={() => {
-          return;
-        }}
-      />
-    );
-
-    expect(queryByText("Sailor Pro Gear, Black, M")).toBeInTheDocument();
-
-    await user.click(getByTitle("Configure visible fields"));
-    await user.click(getByLabelText("Show pen"));
-
-    expect(queryByText("Sailor Pro Gear, Black, M")).not.toBeInTheDocument();
-  });
-
-  it("resets hidden fields when restore defaults is clicked", async () => {
-    const { getByText, getByTitle, getByLabelText, queryByText, user } = setup(
-      <CurrentlyInkedCards
-        currentlyInked={currentlyInked}
-        onLayoutChange={() => {
-          return;
-        }}
-      />
-    );
-
-    await user.click(getByTitle("Configure visible fields"));
-    await user.click(getByLabelText("Show pen"));
-
-    expect(queryByText("Sailor Pro Gear, Black, M")).not.toBeInTheDocument();
-
-    await user.click(getByText("Restore defaults"));
-
-    expect(queryByText("Sailor Pro Gear, Black, M")).toBeInTheDocument();
-  });
-
-  it("renders with hidden fields restored from localStorage", () => {
-    localStorage.setItem(storageKeyHiddenFields, JSON.stringify(["pen_name"]));
-
+  it("hides pen_name when specified in hiddenFields prop", () => {
     const { queryByText } = setup(
       <CurrentlyInkedCards
         currentlyInked={currentlyInked}
-        onLayoutChange={() => {
-          return;
-        }}
+        hiddenFields={["pen_name"]}
+        onUsageRecorded={() => {}}
       />
     );
 

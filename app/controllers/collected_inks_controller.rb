@@ -1,15 +1,17 @@
+# Manages the user's active (non-archived) collected inks.
+# Renders the shared collected inks views for active inks, allowing users to view, create, edit, or archive inks.
 class CollectedInksController < ApplicationController
   before_action :authenticate_user!
-  before_action :find_ink, only: %i[edit update destroy archive unarchive destroy]
+  before_action :find_collected_ink, only: %i[edit update archive]
 
   add_breadcrumb "My inks", :collected_inks_path
 
+  helper_method :archive?
+
+  # List all active inks for the current user
+  # Supports HTML, JSON, and CSV formats
+  # Can be filtered by macro_cluster_id
   def index
-    if current_user.collected_inks.empty?
-      flash.now[
-        :notice
-      ] = "Your ink collection is empty. Check out the <a href='/pages/guide'>documentation</a> on how to add some.".html_safe
-    end
     inks =
       current_user
         .collected_inks
@@ -20,7 +22,7 @@ class CollectedInksController < ApplicationController
           micro_cluster: :macro_cluster,
           newest_currently_inked: :last_usage
         )
-        .order("brand_name, line_name, ink_name")
+        .order(:brand_name, :line_name, :ink_name)
     if params.dig(:filter, :macro_cluster_id)
       inks =
         inks.joins(:micro_cluster).where(
@@ -38,21 +40,24 @@ class CollectedInksController < ApplicationController
     end
   end
 
+  # Render form to add a new ink
   def new
     add_breadcrumb "Add ink", "#{collected_inks_path}/new"
 
-    self.ink = current_user.collected_inks.build
+    @collected_ink = current_user.collected_inks.build
   end
 
+  # Render import form for bulk ink uploads
   def import
   end
 
+  # Add a new ink for the current user
   def create
-    self.ink = collected_ink = current_user.collected_inks.build
-    if SaveCollectedInk.new(ink, collected_ink_params).perform
-      flash[:notice] = "Successfully created ink"
+    @collected_ink = current_user.collected_inks.build
+    if SaveCollectedInk.new(@collected_ink, collected_ink_params).perform
+      flash[:notice] = "Successfully added '#{@collected_ink.name}'"
       if params[:redo]
-        self.ink = collected_ink = current_user.collected_inks.build
+        @collected_ink = current_user.collected_inks.build
         render :new
       else
         redirect_to collected_inks_path
@@ -62,55 +67,42 @@ class CollectedInksController < ApplicationController
     end
   end
 
+  # Render form to edit an active ink
   def edit
-    @ink = CollectedInk.find(params[:id])
-    add_breadcrumb "Edit #{@ink.short_name}", "#{collected_ink_path(@ink)}/edit"
+    add_breadcrumb "Edit '#{@collected_ink.name}'", "#{collected_ink_path(@collected_ink)}/edit"
   end
 
+  # Update an active ink
   def update
-    if SaveCollectedInk.new(ink, collected_ink_params).perform
-      flash[:notice] = "Successfully updated ink"
-      if archive?
-        redirect_to collected_inks_path(search: { archive: true })
-      else
-        redirect_to collected_inks_path
-      end
+    if SaveCollectedInk.new(@collected_ink, collected_ink_params).perform
+      flash[:notice] = "Successfully updated '#{@collected_ink.name}'"
+      redirect_to collected_inks_path
     else
       render :edit
     end
   end
 
+  # Archive an active ink
   def archive
-    flash[:notice] = "Successfully archived '#{ink.name}'" if ink
-    ink&.archive!
+    flash[:notice] = "Successfully archived '#{@collected_ink.name}'" if @collected_ink
+    @collected_ink&.archive!
     redirect_to collected_inks_path
-  end
-
-  def unarchive
-    flash[:notice] = "Successfully unarchived '#{ink.name}'" if ink
-    ink&.unarchive!
-    redirect_to collected_inks_path(search: { archive: true })
-  end
-
-  def destroy
-    flash[:notice] = "Successfully deleted '#{ink.name}'" if ink
-    ink&.destroy
-    redirect_to collected_inks_path(search: { archive: true })
   end
 
   private
 
-  attr_accessor :ink
-
-  def find_ink
-    self.ink = current_user.collected_inks.find(params[:id])
+  # Find an ink for the current user by ID
+  def find_collected_ink
+    @collected_ink = current_user.collected_inks.find(params[:id])
   end
 
-  helper_method :archive?
+  # Shared helper used by views to distinguish active/archive mode
+  # Returns false for active controller (true for archive controller)
   def archive?
-    params.dig(:search, :archive) == "true" || params[:archive]
+    false
   end
 
+  # Whitelist permitted parameters for ink create/update
   def collected_ink_params
     params.require(:collected_ink).permit(
       :brand_name,
@@ -128,6 +120,7 @@ class CollectedInksController < ApplicationController
     )
   end
 
+  # Configure JSON serialization options for index action
   def index_options
     options = { include: [:tags] }
     if params.dig(:fields, :collected_ink)

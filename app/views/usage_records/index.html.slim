@@ -1,15 +1,15 @@
-- content_for :title, "Usage records"
+- content_for :title, "Usage Records"
 - if current_user.usage_records.count < 5
   div class="col-sm-12"
     div class="alert alert-success"
       'By clicking on the
       = fa_icon('bookmark')
       ' button next to a
-      = link_to 'currently inked', currently_inked_index_path
+      = link_to 'Currently Inked', currently_inked_index_path
       '  entry you can generate a usage record entry for today. Right now these
       ' records are only displayed here (and you can download them). In the future
       ' you will be able to see some awesome statistics on the
-      = link_to 'dashboard', dashboard_path
+      = link_to 'Dashboard', dashboard_path
       | .
 
 div id="usage-records"
@@ -32,7 +32,7 @@ div id="usage-records"
           td= ur.pen_name
           td= ur.ink_name
           td
-            span class="actions"
+            div class="entry-actions"
               = link_to usage_record_path(ur), class: "btn btn-danger", method: :delete, data: { confirm: "Really delete entry?"} do
                 = fa_icon("trash")
 

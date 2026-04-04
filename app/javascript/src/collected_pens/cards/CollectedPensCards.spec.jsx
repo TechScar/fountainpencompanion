@@ -1,12 +1,9 @@
-// @ts-check
 import React from "react";
 import { render } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import { CollectedPensCards, storageKeyHiddenFields } from "./CollectedPensCards";
+import { CollectedPensCards } from "./CollectedPensCards";
 
 const setup = (jsx, options) => {
   return {
-    user: userEvent.setup(),
     ...render(jsx, options)
   };
 };
@@ -42,79 +39,19 @@ describe("<CollectedPensCards />", () => {
     }
   ];
 
-  beforeEach(() => {
-    localStorage.clear();
-  });
-
   it("renders", async () => {
-    const { findByText } = setup(
-      <CollectedPensCards
-        pens={pens}
-        onLayoutChange={() => {
-          return;
-        }}
-      />
-    );
+    const { findByText } = setup(<CollectedPensCards pens={pens} hiddenFields={[]} />);
 
     const result = await findByText("Faber-Castell Loom");
 
     expect(result).toBeInTheDocument();
   });
 
-  it("updates hidden fields when clicked", async () => {
-    const { getByTitle, getByLabelText, queryAllByTestId, user } = setup(
-      <CollectedPensCards
-        pens={pens}
-        onLayoutChange={() => {
-          return;
-        }}
-      />
+  it("hides fields specified in hiddenFields prop", () => {
+    const { queryAllByTestId } = setup(
+      <CollectedPensCards pens={pens} hiddenFields={["usage", "daily_usage", "last_used_on"]} />
     );
-
-    expect(queryAllByTestId("usage")).not.toEqual([]);
-
-    await user.click(getByTitle("Configure visible fields"));
-    await user.click(getByLabelText("Show usage"));
-    await user.click(getByLabelText("Show daily usage"));
-    await user.click(getByLabelText("Show last usage"));
 
     expect(queryAllByTestId("usage")).toEqual([]);
-  });
-
-  it("resets hidden fields when restore defaults is clicked", async () => {
-    const { getByText, getByTitle, getByLabelText, queryAllByTestId, user } = setup(
-      <CollectedPensCards
-        pens={pens}
-        onLayoutChange={() => {
-          return;
-        }}
-      />
-    );
-
-    await user.click(getByTitle("Configure visible fields"));
-    await user.click(getByLabelText("Show usage"));
-    await user.click(getByLabelText("Show daily usage"));
-    await user.click(getByLabelText("Show last usage"));
-
-    expect(queryAllByTestId("usage")).toEqual([]);
-
-    await user.click(getByText("Restore defaults"));
-
-    expect(queryAllByTestId("usage")).not.toEqual([]);
-  });
-
-  it("renders with hidden fields restored from localStorage", () => {
-    localStorage.setItem(storageKeyHiddenFields, JSON.stringify(["usage", "daily_usage"]));
-
-    const { queryByText } = setup(
-      <CollectedPensCards
-        pens={pens}
-        onLayoutChange={() => {
-          return;
-        }}
-      />
-    );
-
-    expect(queryByText("1 inked (2 daily usages)")).not.toBeInTheDocument();
   });
 });

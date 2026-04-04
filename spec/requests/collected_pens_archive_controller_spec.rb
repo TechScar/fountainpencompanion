@@ -6,7 +6,7 @@ describe CollectedPensArchiveController do
 
   describe "#index" do
     it "requires authentication" do
-      get "/collected_pens_archive"
+      get "/collected_pens/archive"
       expect(response).to redirect_to(new_user_session_path)
     end
 
@@ -14,24 +14,16 @@ describe CollectedPensArchiveController do
       before(:each) { sign_in(user) }
 
       it "correctly renders the page" do
-        collected_pen.update!(archived_on: Date.today)
-        get "/collected_pens_archive"
+        get "/collected_pens/archive"
         expect(response).to be_successful
-        expect(response.body).to include(collected_pen.brand)
-      end
-
-      it "does not include unarchived pens" do
-        collected_pen.update!(archived_on: nil)
-        get "/collected_pens_archive"
-        expect(response).to be_successful
-        expect(response.body).to_not include(collected_pen.brand)
+        expect(response.body).to include("data-archive=\"true\"")
       end
     end
   end
 
   describe "#edit" do
     it "requires authentication" do
-      get "/collected_pens_archive/#{collected_pen.id}/edit"
+      get "/collected_pens/archive/#{collected_pen.id}/edit"
       expect(response).to redirect_to(new_user_session_path)
     end
 
@@ -39,14 +31,14 @@ describe CollectedPensArchiveController do
       before(:each) { sign_in(user) }
 
       it "correctly renders the page" do
-        get "/collected_pens_archive/#{collected_pen.id}/edit"
+        get "/collected_pens/archive/#{collected_pen.id}/edit"
         expect(response).to be_successful
         expect(response.body).to include(collected_pen.brand)
       end
 
       it "does not show pens from other users" do
         pen = create(:collected_pen, archived_on: Date.today)
-        get "/collected_pens_archive/#{pen.id}/edit"
+        get "/collected_pens/archive/#{pen.id}/edit"
         expect(response).to have_http_status(:not_found)
       end
     end
@@ -54,7 +46,7 @@ describe CollectedPensArchiveController do
 
   describe "#update" do
     it "requires authentication" do
-      put "/collected_pens_archive/#{collected_pen.id}"
+      put "/collected_pens/archive/#{collected_pen.id}"
       expect(response).to redirect_to(new_user_session_path)
     end
 
@@ -63,7 +55,7 @@ describe CollectedPensArchiveController do
 
       it "correctly updates the pen" do
         expect do
-          put "/collected_pens_archive/#{collected_pen.id}",
+          put "/collected_pens/archive/#{collected_pen.id}",
               params: {
                 collected_pen: {
                   brand: "the brand"
@@ -75,19 +67,20 @@ describe CollectedPensArchiveController do
 
       it "does not update when validations fail" do
         expect do
-          put "/collected_pens_archive/#{collected_pen.id}",
+          put "/collected_pens/archive/#{collected_pen.id}",
               params: {
                 collected_pen: {
                   brand: ""
                 }
               }
         end.to_not(change { collected_pen.reload.brand })
+        expect(response).to render_template("collected_pens/edit")
       end
 
       it "does not update pens from other users" do
         pen = create(:collected_pen, archived_on: Date.today)
         expect do
-          put "/collected_pens_archive/#{pen.id}", params: { collected_pen: { brand: "the brand" } }
+          put "/collected_pens/archive/#{pen.id}", params: { collected_pen: { brand: "the brand" } }
           expect(response).to have_http_status(:not_found)
         end.to_not(change { pen.reload.brand })
       end
@@ -96,7 +89,7 @@ describe CollectedPensArchiveController do
 
   describe "#unarchive" do
     it "requires authentication" do
-      post "/collected_pens_archive/#{collected_pen.id}/unarchive"
+      post "/collected_pens/archive/#{collected_pen.id}/unarchive"
       expect(response).to redirect_to(new_user_session_path)
     end
 
@@ -104,7 +97,7 @@ describe CollectedPensArchiveController do
       before(:each) { sign_in(user) }
 
       it "correctly unarchives the pen" do
-        expect do post "/collected_pens_archive/#{collected_pen.id}/unarchive" end.to change {
+        expect do post "/collected_pens/archive/#{collected_pen.id}/unarchive" end.to change {
           collected_pen.reload.archived?
         }.from(true).to(false)
         expect(response).to redirect_to(collected_pens_archive_index_path)
@@ -113,7 +106,7 @@ describe CollectedPensArchiveController do
       it "does not unarchive pens from other users" do
         pen = create(:collected_pen, archived_on: Date.today)
         expect do
-          post "/collected_pens_archive/#{pen.id}/unarchive"
+          post "/collected_pens/archive/#{pen.id}/unarchive"
           expect(response).to have_http_status(:not_found)
         end.to_not(change { pen.reload.archived? })
       end
@@ -122,7 +115,7 @@ describe CollectedPensArchiveController do
 
   describe "#destroy" do
     it "requires authentication" do
-      delete "/collected_pens_archive/#{collected_pen.id}"
+      delete "/collected_pens/archive/#{collected_pen.id}"
       expect(response).to redirect_to(new_user_session_path)
     end
 
@@ -133,7 +126,7 @@ describe CollectedPensArchiveController do
       end
 
       it "correctly deletes the pen" do
-        expect do delete "/collected_pens_archive/#{collected_pen.id}" end.to change {
+        expect do delete "/collected_pens/archive/#{collected_pen.id}" end.to change {
           user.collected_pens.count
         }.by(-1)
         expect(response).to redirect_to(collected_pens_archive_index_path)
@@ -142,7 +135,7 @@ describe CollectedPensArchiveController do
       it "does not unarchive pens from other users" do
         pen = create(:collected_pen)
         expect do
-          delete "/collected_pens_archive/#{pen.id}"
+          delete "/collected_pens/archive/#{pen.id}"
           expect(response).to have_http_status(:not_found)
         end.to_not(change { CollectedPen.count })
       end

@@ -1,8 +1,7 @@
 import React from "react";
 import { Card } from "../../components/Card";
-import { UsageButton } from "../components/UsageButton";
 import { RelativeDate } from "../../components/RelativeDate";
-import "./currently-inked-card.scss";
+import { ActionsCell } from "../table/ActionsCell";
 
 /**
  * @param {{
@@ -42,6 +41,7 @@ export const CurrentlyInkedCard = (props) => {
   const {
     hiddenFields,
     id,
+    archived,
     comment,
     ink_name,
     inked_on,
@@ -49,6 +49,7 @@ export const CurrentlyInkedCard = (props) => {
     daily_usage,
     pen_name,
     refillable,
+    unarchivable,
     used_today,
     onUsageRecorded,
     collected_ink,
@@ -62,9 +63,9 @@ export const CurrentlyInkedCard = (props) => {
   const isVisible = (field) => props[field] && !hiddenFields.includes(field);
 
   return (
-    <Card className="fpc-currently-inked-card">
-      <Card.Image className="fpc-currently-inked-card__swab" style={{ "--swab-color": color }} />
-      <Card.Body>
+    <Card>
+      {color && <Card.Image className="swab" style={{ "--swab-color": color }} />}
+      <Card.Header>
         <Card.Title>
           {ink_name}
           {macro_cluster && (
@@ -76,6 +77,8 @@ export const CurrentlyInkedCard = (props) => {
             </>
           )}
         </Card.Title>
+      </Card.Header>
+      <Card.Body>
         {isVisible("comment") ? <Card.Text>{comment}</Card.Text> : null}
         {isVisible("pen_name") ? (
           <>
@@ -115,38 +118,19 @@ export const CurrentlyInkedCard = (props) => {
             <Card.Text>{daily_usage}</Card.Text>
           </>
         ) : null}
-        <div className="fpc-currently-inked-card__footer">
-          <div className="fpc-currently-inked-card__actions">
-            <UsageButton id={id} used={used_today} onUsageRecorded={onUsageRecorded} />
-            {refillable && (
-              <a
-                className="btn btn-secondary ms-2"
-                title="Refill this pen"
-                href={`/currently_inked/${id}/refill`}
-                data-method="post"
-                data-confirm={`Really refill ${ink_name}?`}
-              >
-                <i className="fa fa-rotate-right"></i>
-              </a>
-            )}
-            <a
-              className="btn btn-secondary  ms-2"
-              title="edit"
-              href={`/currently_inked/${id}/edit`}
-            >
-              <i className="fa fa-pencil" />
-            </a>
-            <a
-              className="btn btn-secondary ms-2"
-              title="archive"
-              href={`/currently_inked/${id}/archive`}
-              data-method="post"
-            >
-              <i className="fa fa-archive" />
-            </a>
-          </div>
-        </div>
       </Card.Body>
+      <Card.Footer>
+        <ActionsCell
+          id={id}
+          archived={archived}
+          pen_name={pen_name}
+          refillable={refillable}
+          ink_name={ink_name}
+          used_today={used_today}
+          unarchivable={unarchivable}
+          onUsageRecorded={onUsageRecorded}
+        />
+      </Card.Footer>
     </Card>
   );
 };

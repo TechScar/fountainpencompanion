@@ -1,17 +1,15 @@
 import React from "react";
 import { render } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import { CollectedInksCards, storageKeyHiddenFields } from "./CollectedInksCards";
+import { CollectedInksCards } from "./CollectedInksCards";
 
 const setup = (jsx, options) => {
   return {
-    user: userEvent.setup(),
     ...render(jsx, options)
   };
 };
 
 describe("<CollectedInksCards />", () => {
-  const data = [
+  const inks = [
     {
       id: "4",
       brand_name: "Sailor",
@@ -42,81 +40,19 @@ describe("<CollectedInksCards />", () => {
     }
   ];
 
-  beforeEach(() => {
-    localStorage.clear();
-  });
-
   it("renders", async () => {
-    const { findByText } = setup(
-      <CollectedInksCards
-        archive={false}
-        data={data}
-        onLayoutChange={() => {
-          return;
-        }}
-      />
-    );
+    const { findByText } = setup(<CollectedInksCards inks={inks} hiddenFields={[]} />);
 
     const result = await findByText("Sailor Shikiori Yozakura");
 
     expect(result).toBeInTheDocument();
   });
 
-  it("updates hidden fields when clicked", async () => {
-    const { getByTitle, getByLabelText, queryByTestId, user } = setup(
-      <CollectedInksCards
-        archive={false}
-        data={data}
-        onLayoutChange={() => {
-          return;
-        }}
-      />
+  it("hides fields specified in hiddenFields prop", () => {
+    const { queryByTestId } = setup(
+      <CollectedInksCards inks={inks} hiddenFields={["usage", "daily_usage"]} />
     );
-
-    expect(queryByTestId("usage")).toBeInTheDocument();
-
-    await user.click(getByTitle("Configure visible fields"));
-    await user.click(getByLabelText("Show usage"));
-    await user.click(getByLabelText("Show daily usage"));
 
     expect(queryByTestId("usage")).not.toBeInTheDocument();
-  });
-
-  it("resets hidden fields when restore defaults is clicked", async () => {
-    const { getByText, getByTitle, getByLabelText, queryByText, getByTestId, user } = setup(
-      <CollectedInksCards
-        archive={false}
-        data={data}
-        onLayoutChange={() => {
-          return;
-        }}
-      />
-    );
-
-    await user.click(getByTitle("Configure visible fields"));
-    await user.click(getByLabelText("Show usage"));
-    await user.click(getByLabelText("Show daily usage"));
-
-    expect(queryByText("2 inked (1 daily usages)")).not.toBeInTheDocument();
-
-    await user.click(getByText("Restore defaults"));
-
-    expect(getByTestId("usage")).toBeInTheDocument();
-  });
-
-  it("renders with hidden fields restored from localStorage", () => {
-    localStorage.setItem(storageKeyHiddenFields, JSON.stringify(["usage", "daily_usage"]));
-
-    const { queryByText } = setup(
-      <CollectedInksCards
-        archive={false}
-        data={data}
-        onLayoutChange={() => {
-          return;
-        }}
-      />
-    );
-
-    expect(queryByText("2 inked (1 daily usages)")).not.toBeInTheDocument();
   });
 });

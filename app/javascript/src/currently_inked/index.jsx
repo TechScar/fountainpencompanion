@@ -5,12 +5,12 @@ import { CurrentlyInked } from "./CurrentlyInked";
 import { ErrorBoundary } from "../ErrorBoundary";
 
 document.addEventListener("DOMContentLoaded", () => {
-  const elements = document.querySelectorAll("#currently-inked-app");
+  const elements = document.querySelectorAll("#currently-inked .app");
   Array.from(elements).forEach((el) => {
     const root = createRoot(el);
     root.render(
       <ErrorBoundary>
-        <CurrentlyInked />
+        <CurrentlyInked archive={el.getAttribute("data-archive") == "true"} />
       </ErrorBoundary>
     );
   });

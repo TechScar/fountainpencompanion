@@ -4,10 +4,10 @@
   - content_for :breadcrumbs
     ol class="breadcrumb"
       li class="breadcrumb-item"
-        = link_to "Inks", collected_inks_path
+        = link_to "My Inks", collected_inks_path
       li class="breadcrumb-item"
-        = link_to "Archive",  "/collected_inks?search[archive]=true"
+        = link_to "Archive", collected_inks_archive_index_path
       li class="breadcrumb-item active" aria-current="page"
-        = @ink.short_name
+        = @collected_ink.name
 
-= render partial: "form", locals: { ink: @ink }
+= render partial: "collected_inks/form", locals: { collected_ink: @collected_ink, form_url: (archive? ? collected_inks_archive_path(@collected_ink) : collected_ink_path(@collected_ink)) }

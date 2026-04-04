@@ -4,7 +4,7 @@ import { Widget, WidgetDataContext } from "./widgets";
 
 export const CurrentlyInkedSummaryWidget = ({ renderWhenInvisible }) => (
   <Widget
-    header="Currently inked"
+    header="Currently Inked"
     path="/dashboard/widgets/currently_inked_summary.json"
     withLinks
     renderWhenInvisible={renderWhenInvisible}

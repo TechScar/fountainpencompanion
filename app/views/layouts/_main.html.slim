@@ -10,6 +10,8 @@ main class="fpc-main #{content_for(:container).presence || "container-xxl"}" id=
   - if content_for?(:subtitle)
     div.fpc-subtitle= content_for :subtitle
 
+  - if flash[:primary]
+    div class="alert alert-primary"= flash[:primary]
   - if flash[:notice]
     div class="alert alert-success"= flash[:notice]
   - if flash[:alert]

@@ -1,14 +1,12 @@
-import React, { useState, useEffect, useMemo } from "react";
-import Jsona from "jsona";
-import { getRequest } from "../fetch";
+import React from "react";
+import { CollectionListPageShell } from "../components/CollectionListPageShell";
+import {
+  CollectionLoadingPlaceholder,
+  shouldUseCardLayout
+} from "../components/CollectionLoadingPlaceholder";
 import { useLayout } from "../useLayout";
 import { useScreen } from "../useScreen";
-import { CardsPlaceholder } from "../components/CardsPlaceholder";
-import { TablePlaceholder } from "../components/TablePlaceholder";
-import { CollectedInksCards } from "./cards";
-import { CollectedInksTable } from "./table";
-
-const formatter = new Jsona();
+import { CollectedInksContent } from "./CollectedInksContent";
 
 export const storageKeyLayout = "fpc-collected-inks-layout";
 
@@ -16,41 +14,26 @@ export const storageKeyLayout = "fpc-collected-inks-layout";
  * @param {{ archive: boolean }} props
  */
 export const CollectedInks = ({ archive }) => {
-  const [inks, setInks] = useState();
-
-  useEffect(() => {
-    async function getCollectedInks() {
-      const response = await getRequest("/collected_inks.json");
-      const json = await response.json();
-      const inks = formatter.deserialize(json);
-      setInks(inks);
-    }
-    getCollectedInks();
-  }, []);
-
-  const visibleInks = useMemo(
-    () => (inks ? inks.filter((i) => i.archived == archive) : []),
-    [inks, archive]
-  );
-
   const screen = useScreen();
   const { layout, onLayoutChange } = useLayout(storageKeyLayout);
+  const showCards = shouldUseCardLayout(layout, screen.isSmall);
 
-  if (layout ? layout === "card" : screen.isSmall) {
-    if (inks) {
-      return (
-        <CollectedInksCards data={visibleInks} archive={archive} onLayoutChange={onLayoutChange} />
-      );
-    } else {
-      return <CardsPlaceholder />;
-    }
-  } else {
-    if (inks) {
-      return (
-        <CollectedInksTable data={visibleInks} archive={archive} onLayoutChange={onLayoutChange} />
-      );
-    } else {
-      return <TablePlaceholder />;
-    }
-  }
+  const endpoint = archive
+    ? "/api/v1/collected_inks.json?filter[archived]=true"
+    : "/api/v1/collected_inks.json?filter[archived]=false";
+
+  const loadingComponent = <CollectionLoadingPlaceholder showCards={showCards} />;
+
+  return (
+    <CollectionListPageShell endpoint={endpoint} loadingComponent={loadingComponent} paginated>
+      {(inks) => (
+        <CollectedInksContent
+          inks={inks}
+          archive={archive}
+          showCards={showCards}
+          onLayoutChange={onLayoutChange}
+        />
+      )}
+    </CollectionListPageShell>
+  );
 };

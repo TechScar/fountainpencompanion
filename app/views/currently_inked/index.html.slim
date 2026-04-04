@@ -1,2 +1,13 @@
-- content_for :title, "Currently inked"
-div id="currently-inked-app"
+- if archive?
+  - content_for :title, "Currently Inked Archive"
+  - content_for :breadcrumbs
+    ol class="breadcrumb"
+      li class="breadcrumb-item"
+        = link_to "Currently Inked", currently_inked_index_path
+      li class="breadcrumb-item active" aria-current="page"
+        | Archive
+- else
+  - content_for :title, "Currently Inked"
+
+div id="currently-inked"
+  div class="app" data-archive="#{archive?}"

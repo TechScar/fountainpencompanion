@@ -191,62 +191,6 @@ describe CollectedInksController do
     end
   end
 
-  describe "#unarchive" do
-    it "requires authentication" do
-      post :unarchive, params: { id: 1 }
-      expect(response).to redirect_to(new_user_session_path)
-    end
-
-    context "signed in" do
-      before { sign_in(user) }
-
-      it "unarchives the ink" do
-        ink = create(:collected_ink, user: user, archived_on: Date.today)
-        expect do
-          post :unarchive, params: { id: ink.id }
-          expect(response).to redirect_to(collected_inks_path(search: { archive: true }))
-        end.to change { ink.reload.archived_on }.from(Date.today).to(nil)
-      end
-
-      it "does not archive other user inks" do
-        ink = create(:collected_ink, archived_on: Date.today)
-        expect do
-          expect do post :unarchive, params: { id: ink.id } end.to raise_error(
-            ActiveRecord::RecordNotFound
-          )
-        end.to_not change { ink.reload.archived_on }
-      end
-    end
-  end
-
-  describe "#destroy" do
-    it "requires authentication" do
-      delete :unarchive, params: { id: 1 }
-      expect(response).to redirect_to(new_user_session_path)
-    end
-
-    context "signed in" do
-      before { sign_in(user) }
-
-      it "deletes the ink" do
-        ink = create(:collected_ink, user: user)
-        expect do
-          delete :destroy, params: { id: ink.id }
-          expect(response).to redirect_to(collected_inks_path(search: { archive: true }))
-        end.to change { user.collected_inks.count }.by(-1)
-      end
-
-      it "does not delete other user inks" do
-        ink = create(:collected_ink)
-        expect do
-          expect { delete :destroy, params: { id: ink.id } }.to raise_error(
-            ActiveRecord::RecordNotFound
-          )
-        end.to_not change { CollectedInk.count }
-      end
-    end
-  end
-
   describe "#edit" do
     it "requires authentication" do
       get :edit, params: { id: 1 }
