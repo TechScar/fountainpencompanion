@@ -19,7 +19,7 @@ export const CollectedPens = () => {
     async function getCollectedPens() {
       setPens(await getPens());
     }
-    getCollectedPens();
+    getCollectedPens().catch(() => {});
   }, []);
 
   const screen = useScreen();
