@@ -178,29 +178,30 @@ class MacroCluster < ApplicationRecord
       .where("collected_inks.simplified_#{field} LIKE ?", "%#{simplified_term}%")
       .where("#{effective} != ''")
       .group(effective)
-      .order(effective)
-      .select("min(macro_clusters.id) as id, #{effective} as #{field}")
+      .select("min(macro_clusters.id)")
       .having("count(collected_inks.id) > 2")
   end
 
   def self.autocomplete_line_search(term, brand_name)
+    effective = effective_column(:line_name)
     simplified_brand_name = Simplifier.brand_name(brand_name.to_s)
     query = autocomplete_search(term, :line_name)
     if simplified_brand_name.present?
       query =
         query.where("collected_inks.simplified_brand_name LIKE ?", "%#{simplified_brand_name}%")
     end
-    query
+    where(id: query).order(effective)
   end
 
   def self.autocomplete_ink_search(term, brand_name)
+    effective = effective_column(:ink_name)
     simplified_brand_name = Simplifier.brand_name(brand_name.to_s)
     query = autocomplete_search(term, :ink_name)
     if simplified_brand_name.present?
       query =
         query.where("collected_inks.simplified_brand_name LIKE ?", "%#{simplified_brand_name}%")
     end
-    query
+    where(id: query).order(effective)
   end
 
   def self.public
