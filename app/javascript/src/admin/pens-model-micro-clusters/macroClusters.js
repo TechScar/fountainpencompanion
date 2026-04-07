@@ -16,12 +16,14 @@ export const getMacroClusters = (dispatch) => {
   const formatter = new Jsona();
   function run(page = 1) {
     loadMacroClusterPage(page).then((json) => {
-      const pagination = json.meta.pagination;
-      dispatch({
-        type: SET_LOADING_PERCENTAGE,
-        payload: (pagination.current_page * 100) / pagination.total_pages
-      });
-      const next_page = json.meta.pagination.next_page;
+      const pagination = json.meta?.pagination;
+      if (pagination) {
+        dispatch({
+          type: SET_LOADING_PERCENTAGE,
+          payload: (pagination.current_page * 100) / pagination.total_pages
+        });
+      }
+      const next_page = pagination?.next_page;
       const pageData = formatter.deserialize(json).map((c) => {
         const grouped_model_variants = groupedPens(
           c.model_micro_clusters.map((c) => c.model_variants).flat()

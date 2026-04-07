@@ -9,7 +9,7 @@ export const getMicroClusters = (dispatch) => {
   let data = [];
   function run(page = 1) {
     loadMicroClusterPage(page).then((json) => {
-      const next_page = json.meta.pagination.next_page;
+      const next_page = json.meta?.pagination?.next_page;
       // Remove clusters without collected inks
       // Group collected inks
       const pageData = formatter
