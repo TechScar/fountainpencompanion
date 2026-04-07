@@ -18,10 +18,11 @@ const fetchAllCurrentlyInked = async (filterArchived) => {
       params.set("filter[archived]", filterArchived);
     }
     const response = await getRequest(`/api/v1/currently_inked.json?${params}`);
+    if (!response.ok) throw new Error(`Request failed: ${response.status}`);
     const json = await response.json();
     const items = formatter.deserialize(json);
     all.push(...items);
-    page = json.meta.pagination.next_page;
+    page = json.meta?.pagination?.next_page;
   } while (page);
   return all;
 };

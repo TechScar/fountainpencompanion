@@ -67,7 +67,7 @@ const getCurrentlyInked = async () => {
   let page = 1;
   do {
     const json = await getPage(page);
-    page = json.meta.pagination.next_page;
+    page = json.meta?.pagination?.next_page;
     receivedCurrentlyInked.push(...formatter.deserialize(json));
   } while (page);
   return receivedCurrentlyInked;

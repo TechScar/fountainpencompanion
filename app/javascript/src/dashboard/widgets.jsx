@@ -98,7 +98,7 @@ const getPaginatedData = async (path) => {
   let page = 1;
   do {
     const json = await getPage(path, page);
-    page = json.meta.pagination.next_page;
+    page = json.meta?.pagination?.next_page;
     receivedData.push(...formatter.deserialize(json));
   } while (page);
   return receivedData;
@@ -106,6 +106,7 @@ const getPaginatedData = async (path) => {
 
 const getPage = async (path, page) => {
   const response = await getRequest(`${path}?page[number]=${page}`);
+  if (!response.ok) throw new Error(`Request failed: ${response.status}`);
   const json = await response.json();
   return json;
 };
