@@ -32,7 +32,7 @@ class Pens::ModelVariant < ApplicationRecord
   end
 
   def pen_model
-    model_micro_cluster.model
+    model_micro_cluster&.model
   end
 
   def name
