@@ -51,12 +51,13 @@ export const CurrentlyInkedCard = (props) => {
     refillable,
     used_today,
     onUsageRecorded,
-    collected_ink: {
-      color,
-      micro_cluster: { macro_cluster }
-    },
-    collected_pen: { model_variant_id }
+    collected_ink,
+    collected_pen
   } = props;
+
+  const color = collected_ink.color;
+  const macro_cluster = collected_ink.micro_cluster?.macro_cluster;
+  const model_variant_id = collected_pen?.model_variant_id;
 
   const isVisible = (field) => props[field] && !hiddenFields.includes(field);
 
