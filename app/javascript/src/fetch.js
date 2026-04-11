@@ -40,6 +40,10 @@ async function req(path, method, body, retries = 5) {
     }
     throw error;
   }
+  if (response.status === 401) {
+    window.location.href = "/users/sign_in";
+    return;
+  }
   const failure = !response.ok;
   if (method === "GET" && failure && retries > 0) {
     console.log("Retrying", path, method, body, retries);
