@@ -72,4 +72,58 @@ describe("<SwabCard />", () => {
     expect(queryByText("Inked")).not.toBeInTheDocument();
     expect(queryByText("Last used")).not.toBeInTheDocument();
   });
+
+  it("renders without crashing when micro_cluster is null", () => {
+    const { getByText } = setup(
+      <CurrentlyInkedCard
+        id="1"
+        archived={false}
+        ink_name="Black"
+        inked_on="2023-06-19"
+        pen_name="Pilot Metropolitan"
+        refillable={true}
+        used_today={true}
+        collected_ink={{
+          id: "1",
+          color: "#000",
+          micro_cluster: null
+        }}
+        collected_pen={{
+          id: "1"
+        }}
+        hiddenFields={[]}
+      />
+    );
+
+    expect(getByText("Black")).toBeInTheDocument();
+  });
+
+  it("renders ink link when macro_cluster is present", () => {
+    const { container } = setup(
+      <CurrentlyInkedCard
+        id="1"
+        archived={false}
+        ink_name="Black"
+        inked_on="2023-06-19"
+        pen_name="Pilot Metropolitan"
+        refillable={true}
+        used_today={true}
+        collected_ink={{
+          id: "1",
+          color: "#000",
+          micro_cluster: {
+            id: "1",
+            macro_cluster: { id: "42" }
+          }
+        }}
+        collected_pen={{
+          id: "1"
+        }}
+        hiddenFields={[]}
+      />
+    );
+
+    const link = container.querySelector('a[href="/inks/42"]');
+    expect(link).toBeInTheDocument();
+  });
 });
