@@ -12,8 +12,6 @@ class GoogleSearch
       end
 
     response.body
-  rescue StandardError => e
-    "Search failed: #{e.message}"
   end
 
   private
