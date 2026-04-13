@@ -20,11 +20,19 @@ class Admins::GraphsController < Admins::BaseController
         agents
       when "agent-usage"
         agent_usage
+      when "ink-review-checks"
+        ink_review_checks
       end
     render json: data
   end
 
   private
+
+  def ink_review_checks
+    InkReviewCheck::RESULTS.map do |result|
+      { name: result.titleize, data: build(InkReviewCheck.where(result: result), range: 1.month) }
+    end
+  end
 
   def signups
     [

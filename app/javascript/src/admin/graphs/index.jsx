@@ -10,6 +10,7 @@ import { UsageRecords } from "./UsageRecords";
 // import { Spam } from "./Spam";
 import { Agents } from "./Agents";
 import { AgentUsage } from "./AgentUsage";
+import { InkReviewChecks } from "./InkReviewChecks";
 import { ErrorBoundary } from "../../ErrorBoundary";
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -107,6 +108,18 @@ document.addEventListener("DOMContentLoaded", () => {
     root.render(
       <ErrorBoundary>
         <UsageRecords />
+      </ErrorBoundary>
+    );
+  }
+});
+
+document.addEventListener("DOMContentLoaded", () => {
+  const el = document.getElementById("ink-review-checks-graph");
+  if (el) {
+    const root = createRoot(el);
+    root.render(
+      <ErrorBoundary>
+        <InkReviewChecks />
       </ErrorBoundary>
     );
   }

@@ -1,7 +1,12 @@
 class InkReview < ApplicationRecord
+  CHECK_INTERVAL = 2.months
+  RETRY_INTERVAL = 24.hours
+  MAX_FAILED_CHECKS = 5
+
   belongs_to :macro_cluster
   belongs_to :you_tube_channel, optional: true
   has_many :ink_review_submissions, dependent: :destroy
+  has_many :ink_review_checks, dependent: :destroy
   has_many :agent_logs, as: :owner, dependent: :destroy
 
   paginates_per 1
@@ -17,13 +22,19 @@ class InkReview < ApplicationRecord
   scope :processed, -> { where.not(approved_at: nil).or(where.not(rejected_at: nil)) }
   scope :manually_processed, -> { processed.where(agent_approved: false) }
   scope :agent_processed, -> { processed.where(agent_approved: true) }
+  scope :live, -> { approved.where(check_count: 0) }
+  scope :due_for_check, -> { approved.where("next_check_at <= ?", Time.zone.now) }
+  scope :link_broken, -> { where("check_count > 0 AND check_count < ?", MAX_FAILED_CHECKS) }
+  scope :link_removed, -> { where("check_count >= ?", MAX_FAILED_CHECKS) }
 
   def reject!
     update!(
       rejected_at: Time.zone.now,
       approved_at: nil,
       agent_approved: false,
-      auto_approved: false
+      auto_approved: false,
+      next_check_at: nil,
+      check_count: 0
     )
   end
 
@@ -32,24 +43,50 @@ class InkReview < ApplicationRecord
       approved_at: Time.zone.now,
       rejected_at: nil,
       agent_approved: false,
-      auto_approved: false
+      auto_approved: false,
+      next_check_at: CHECK_INTERVAL.from_now,
+      check_count: 0
     )
   end
 
   def auto_approve!
-    update(approved_at: Time.zone.now, rejected_at: nil, auto_approved: true)
+    update(
+      approved_at: Time.zone.now,
+      rejected_at: nil,
+      auto_approved: true,
+      next_check_at: CHECK_INTERVAL.from_now,
+      check_count: 0
+    )
   end
 
   def auto_reject!
-    update(rejected_at: Time.zone.now, approved_at: nil, auto_approved: true)
+    update(
+      rejected_at: Time.zone.now,
+      approved_at: nil,
+      auto_approved: true,
+      next_check_at: nil,
+      check_count: 0
+    )
   end
 
   def agent_approve!
-    update(approved_at: Time.zone.now, rejected_at: nil, agent_approved: true)
+    update(
+      approved_at: Time.zone.now,
+      rejected_at: nil,
+      agent_approved: true,
+      next_check_at: CHECK_INTERVAL.from_now,
+      check_count: 0
+    )
   end
 
   def agent_reject!
-    update(rejected_at: Time.zone.now, approved_at: nil, agent_approved: true)
+    update(
+      rejected_at: Time.zone.now,
+      approved_at: nil,
+      agent_approved: true,
+      next_check_at: nil,
+      check_count: 0
+    )
   end
 
   def url=(value)
@@ -77,7 +114,7 @@ class InkReview < ApplicationRecord
     return unless you_tube_short?
     return unless user.admin?
 
-    macro_cluster.ink_reviews.approved.exists?
+    macro_cluster.ink_reviews.live.exists?
   end
 
   private
