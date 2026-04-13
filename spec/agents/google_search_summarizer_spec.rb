@@ -5,9 +5,9 @@ RSpec.describe GoogleSearchSummarizer do
 
   let(:parent_agent_log) { AgentLog.create!(name: "ParentAgent", transcript: []) }
   let(:search_term) { "Pilot Iroshizuku Kon-peki ink" }
-  let(:google_api_response) do
+  let(:serper_api_response) do
     {
-      "items" => [
+      "organic" => [
         {
           "title" => "Pilot Iroshizuku Kon-peki - Deep Azure Blue Fountain Pen Ink",
           "link" => "https://example.com/pilot-iroshizuku-kon-peki",
@@ -26,13 +26,24 @@ RSpec.describe GoogleSearchSummarizer do
       }
     }
   end
+  let(:normalized_search_results) do
+    {
+      "items" =>
+        serper_api_response["organic"].map do |r|
+          { "title" => r["title"], "link" => r["link"], "snippet" => r["snippet"] }
+        end,
+      "searchInformation" => {
+        "totalResults" => "2450"
+      }
+    }
+  end
 
   subject { described_class.new(search_term, parent_agent_log: parent_agent_log) }
 
   before do
-    stub_request(:get, %r{www.googleapis.com/customsearch}).to_return(
+    stub_request(:post, %r{google\.serper\.dev/search}).to_return(
       status: 200,
-      body: google_api_response.to_json,
+      body: serper_api_response.to_json,
       headers: {
         "Content-Type" => "application/json"
       }
@@ -218,7 +229,7 @@ RSpec.describe GoogleSearchSummarizer do
     it "performs a Google search" do
       subject.perform
 
-      expect(WebMock).to have_requested(:get, %r{www.googleapis.com/customsearch}).once
+      expect(WebMock).to have_requested(:post, %r{google\.serper\.dev/search}).once
     end
 
     it "makes HTTP request to OpenAI API" do
@@ -348,21 +359,21 @@ RSpec.describe GoogleSearchSummarizer do
         .with { |req|
           body = JSON.parse(req.body)
           body["messages"].any? do |msg|
-            msg["content"]&.include?("The search results are: #{google_api_response.to_json}")
+            msg["content"]&.include?("The search results are: #{normalized_search_results.to_json}")
           end
         }
         .at_least_once
     end
 
     it "handles empty search results" do
-      empty_results = { "items" => [] }
-      stub_request(:get, %r{www.googleapis.com/customsearch}).to_return(
+      stub_request(:post, %r{google\.serper\.dev/search}).to_return(
         status: 200,
-        body: empty_results.to_json,
+        body: { "organic" => [] }.to_json,
         headers: {
           "Content-Type" => "application/json"
         }
       )
+      expected_empty = { "items" => [], "searchInformation" => { "totalResults" => "" } }
       summarizer = described_class.new(search_term, parent_agent_log: parent_agent_log)
 
       summarizer.perform
@@ -371,7 +382,7 @@ RSpec.describe GoogleSearchSummarizer do
         .with { |req|
           body = JSON.parse(req.body)
           body["messages"].any? do |msg|
-            msg["content"]&.include?("The search results are: #{empty_results.to_json}")
+            msg["content"]&.include?("The search results are: #{expected_empty.to_json}")
           end
         }
         .at_least_once
@@ -510,7 +521,7 @@ RSpec.describe GoogleSearchSummarizer do
 
     context "when Google Search fails" do
       before do
-        stub_request(:get, %r{www.googleapis.com/customsearch}).to_return(
+        stub_request(:post, %r{google\.serper\.dev/search}).to_return(
           status: 500,
           body: "Internal Server Error"
         )
@@ -637,7 +648,7 @@ RSpec.describe GoogleSearchSummarizer do
     context "low results scenario" do
       let(:low_results) do
         {
-          "items" => [
+          "organic" => [
             {
               "title" => "Obscure Ink Brand XYZ",
               "link" => "https://example.com/obscure-ink",
@@ -651,7 +662,7 @@ RSpec.describe GoogleSearchSummarizer do
       end
 
       before do
-        stub_request(:get, %r{www.googleapis.com/customsearch}).to_return(
+        stub_request(:post, %r{google\.serper\.dev/search}).to_return(
           status: 200,
           body: low_results.to_json,
           headers: {

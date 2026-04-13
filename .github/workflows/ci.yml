@@ -21,8 +21,7 @@ jobs:
       GOOGLE_CLIENT_SECRETS: "{}"
       HCAPTCHA_SECRET: test
       HCAPTCHA_SITE_KEY: test
-      GOOGLE_SEARCH_API_KEY: test
-      GOOGLE_SEARCH_ENGINE_ID: test
+      SERPER_API_KEY: test
 
     runs-on: ubuntu-latest
 
