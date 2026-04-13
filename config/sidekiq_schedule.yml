@@ -29,5 +29,5 @@ analyze:
   cron: "0 6 * * *" # Every day at 6am
   class: Analyze
 enqueue_ink_review_checks:
-  cron: "15 * * * *" # Every hour at :15
+  cron: "*/15 * * * *" # Every 15 minutes
   class: EnqueueInkReviewChecks
