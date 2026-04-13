@@ -628,7 +628,7 @@ RSpec.describe ReviewApprover do
 
         expect(cluster_data[:name]).to eq(macro_cluster.name)
         expect(cluster_data[:synonyms]).to eq(macro_cluster.synonyms)
-        expect(cluster_data[:number_of_reviews]).to eq(macro_cluster.ink_reviews.approved.size)
+        expect(cluster_data[:number_of_reviews]).to eq(macro_cluster.ink_reviews.live.size)
       end
     end
 

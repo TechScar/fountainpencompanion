@@ -1,6 +1,7 @@
 SET statement_timeout = 0;
 SET lock_timeout = 0;
 SET idle_in_transaction_session_timeout = 0;
+SET transaction_timeout = 0;
 SET client_encoding = 'UTF8';
 SET standard_conforming_strings = on;
 SELECT pg_catalog.set_config('search_path', '', false);
@@ -483,6 +484,39 @@ ALTER SEQUENCE public.ink_embeddings_id_seq OWNED BY public.ink_embeddings.id;
 
 
 --
+-- Name: ink_review_checks; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.ink_review_checks (
+    id bigint NOT NULL,
+    ink_review_id bigint NOT NULL,
+    result character varying NOT NULL,
+    error_message text,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL
+);
+
+
+--
+-- Name: ink_review_checks_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.ink_review_checks_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: ink_review_checks_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.ink_review_checks_id_seq OWNED BY public.ink_review_checks.id;
+
+
+--
 -- Name: ink_review_submissions; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -540,7 +574,9 @@ CREATE TABLE public.ink_reviews (
     you_tube_channel_id bigint,
     extra_data jsonb DEFAULT '{}'::jsonb,
     you_tube_short boolean DEFAULT false,
-    agent_approved boolean DEFAULT false
+    agent_approved boolean DEFAULT false,
+    next_check_at timestamp(6) without time zone,
+    check_count integer DEFAULT 0 NOT NULL
 );
 
 
@@ -1225,6 +1261,13 @@ ALTER TABLE ONLY public.ink_embeddings ALTER COLUMN id SET DEFAULT nextval('publ
 
 
 --
+-- Name: ink_review_checks id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ink_review_checks ALTER COLUMN id SET DEFAULT nextval('public.ink_review_checks_id_seq'::regclass);
+
+
+--
 -- Name: ink_review_submissions id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -1444,6 +1487,14 @@ ALTER TABLE ONLY public.ink_brands
 
 ALTER TABLE ONLY public.ink_embeddings
     ADD CONSTRAINT ink_embeddings_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: ink_review_checks ink_review_checks_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ink_review_checks
+    ADD CONSTRAINT ink_review_checks_pkey PRIMARY KEY (id);
 
 
 --
@@ -1816,6 +1867,20 @@ CREATE UNIQUE INDEX index_ink_embeddings_on_owner_type_and_owner_id ON public.in
 
 
 --
+-- Name: index_ink_review_checks_on_ink_review_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_ink_review_checks_on_ink_review_id ON public.ink_review_checks USING btree (ink_review_id);
+
+
+--
+-- Name: index_ink_review_checks_on_result_and_created_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_ink_review_checks_on_result_and_created_at ON public.ink_review_checks USING btree (result, created_at);
+
+
+--
 -- Name: index_ink_review_submissions_on_ink_review_id; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -1841,6 +1906,13 @@ CREATE INDEX index_ink_review_submissions_on_user_id ON public.ink_review_submis
 --
 
 CREATE INDEX index_ink_reviews_on_macro_cluster_id ON public.ink_reviews USING btree (macro_cluster_id);
+
+
+--
+-- Name: index_ink_reviews_on_next_check_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_ink_reviews_on_next_check_at ON public.ink_reviews USING btree (next_check_at);
 
 
 --
@@ -2135,6 +2207,14 @@ ALTER TABLE ONLY public.reading_statuses
 
 
 --
+-- Name: ink_review_checks fk_rails_1bf38ab51e; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ink_review_checks
+    ADD CONSTRAINT fk_rails_1bf38ab51e FOREIGN KEY (ink_review_id) REFERENCES public.ink_reviews(id);
+
+
+--
 -- Name: macro_clusters fk_rails_4b634dc145; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2309,6 +2389,7 @@ ALTER TABLE ONLY public.collected_inks
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20260413083719'),
 ('20260325150042'),
 ('20260308164655'),
 ('20260227093006'),

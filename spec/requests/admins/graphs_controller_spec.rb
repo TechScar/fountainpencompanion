@@ -96,6 +96,30 @@ describe Admins::GraphsController do
         )
       end
 
+      it "returns the ink review checks data" do
+        review = create(:ink_review)
+        InkReviewCheck.create!(ink_review: review, result: "success", created_at: 2.days.ago)
+        InkReviewCheck.create!(ink_review: review, result: "success", created_at: 1.day.ago)
+        InkReviewCheck.create!(ink_review: review, result: "error", created_at: 1.day.ago)
+        InkReviewCheck.create!(ink_review: review, result: "removed", created_at: 1.day.ago)
+        get "/admins/graphs/ink-review-checks"
+        expect(response).to be_successful
+        json = JSON.parse(response.body)
+        expect(json).to eq(
+          [
+            {
+              "name" => "Success",
+              "data" => [
+                [2.days.ago.at_beginning_of_day.to_i * 1000, 1],
+                [1.day.ago.at_beginning_of_day.to_i * 1000, 1]
+              ]
+            },
+            { "name" => "Error", "data" => [[1.day.ago.at_beginning_of_day.to_i * 1000, 1]] },
+            { "name" => "Removed", "data" => [[1.day.ago.at_beginning_of_day.to_i * 1000, 1]] }
+          ]
+        )
+      end
+
       it "returns the bot sign up data" do
         create(:user, created_at: 2.days.ago, bot: true, bot_reason: "reason1")
         create(:user, created_at: 2.days.ago, bot: true, bot_reason: "reason2")

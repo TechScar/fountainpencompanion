@@ -139,7 +139,7 @@ class ReviewApprover
     {
       name: cluster.name,
       synonyms: cluster.synonyms,
-      number_of_reviews: cluster.ink_reviews.approved.size
+      number_of_reviews: cluster.ink_reviews.live.size
     }
   end
 
