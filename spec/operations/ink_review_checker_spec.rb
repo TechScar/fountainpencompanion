@@ -156,6 +156,21 @@ describe InkReviewChecker do
     end
   end
 
+  describe "YouTube video not found (deleted/private)" do
+    before do
+      allow_any_instance_of(Unfurler).to receive(:perform).and_raise(
+        Google::Apis::ClientError.new("YouTube video not found: abc123")
+      )
+    end
+
+    it "records an error check" do
+      described_class.new(review).perform
+      check = InkReviewCheck.last
+      expect(check.result).to eq("error")
+      expect(check.error_message).to include("YouTube video not found")
+    end
+  end
+
   describe "URI::InvalidURIError raised by the unfurler" do
     before do
       allow_any_instance_of(Unfurler).to receive(:perform).and_raise(

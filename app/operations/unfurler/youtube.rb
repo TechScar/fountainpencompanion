@@ -44,6 +44,8 @@ class Unfurler
 
     def video
       @video ||= client.list_videos("snippet", id: video_id).items.first
+      raise Google::Apis::ClientError, "YouTube video not found: #{video_id}" unless @video
+      @video
     end
 
     def client
