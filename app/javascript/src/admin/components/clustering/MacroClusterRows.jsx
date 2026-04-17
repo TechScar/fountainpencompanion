@@ -18,7 +18,7 @@ export const MacroClusterRows = ({
   const [computing, setComputing] = useState(true);
   const [search, setSearch] = useState("");
   useEffect(() => {
-    setComputing(true);
+    setComputing(true); // eslint-disable-line react-hooks/set-state-in-effect -- intentional: show loading state before expensive computation
     setTimeout(() => {
       setClustersWithDistance(_.sortBy(withDistance(macroClusters, activeCluster), "distance"));
       setComputing(false);
@@ -27,7 +27,7 @@ export const MacroClusterRows = ({
   }, [activeCluster.id, updateCounter]);
   // Reset search for each new cluster
   useEffect(() => {
-    setSearch("");
+    setSearch(""); // eslint-disable-line react-hooks/set-state-in-effect -- intentional: reset local state when active cluster changes
   }, [activeCluster.id]);
   if (computing)
     return (

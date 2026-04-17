@@ -1,5 +1,5 @@
 import _ from "lodash";
-import React, { useCallback, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useFieldSwitcher } from "../../useFieldSwitcher";
 import { LayoutToggle } from "../../components/LayoutToggle";
 import { Switch } from "../../components/Switch";
@@ -18,15 +18,14 @@ export const Actions = ({
 }) => {
   const [globalFilter, setGlobalFilter] = useState("");
 
-  // The linter doesn't like our debounce call
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const debouncedOnFilterChange = useCallback(
-    _.debounce(
-      (value) => {
-        onFilterChange(value);
-      },
-      Math.min(numberOfEntries / 10, 500)
-    ),
+  const debouncedOnFilterChange = useMemo(
+    () =>
+      _.debounce(
+        (value) => {
+          onFilterChange(value);
+        },
+        Math.min(numberOfEntries / 10, 500)
+      ),
     [onFilterChange, numberOfEntries]
   );
 

@@ -76,6 +76,7 @@ export const UsageRecordForm = () => {
 
   useEffect(() => {
     if (!includeArchived) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: filter entries when toggling archived off
       setEntries((prev) => {
         const activeOnly = prev.filter((e) => e.group === "active");
         setSelectedId((prevId) => {
