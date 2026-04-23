@@ -1,8 +1,7 @@
-import React from "react";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { RelativeDate } from "./RelativeDate";
 import { add, formatISO9075 } from "date-fns";
+import { RelativeDate } from "./RelativeDate";
 
 describe("<RelativeDate>", () => {
   it("renders nothing when no date passed", () => {

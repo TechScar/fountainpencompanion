@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from "react";
-import ResizeObserver from "rc-resize-observer";
-import TrackVisibility from "react-on-screen";
 import Jsona from "jsona";
+import ResizeObserver from "rc-resize-observer";
+import React, { useEffect, useState } from "react";
+import TrackVisibility from "react-on-screen";
 
 import { getRequest } from "../fetch";
 

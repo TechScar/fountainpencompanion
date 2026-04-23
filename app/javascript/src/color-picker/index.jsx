@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from "react";
-import { createRoot } from "react-dom/client";
+import { useEffect, useState } from "react";
 import { ChromePicker } from "react-color";
+import { createRoot } from "react-dom/client";
 import { ErrorBoundary } from "../ErrorBoundary";
 
 document.addEventListener("DOMContentLoaded", () => {

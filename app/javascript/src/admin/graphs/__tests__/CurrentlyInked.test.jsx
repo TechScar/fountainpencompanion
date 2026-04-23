@@ -1,9 +1,8 @@
 /* eslint-env jest */
 /* global jest, describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, global */
-import React from "react";
 import { render, screen, waitFor } from "@testing-library/react";
-import { CurrentlyInked } from "../CurrentlyInked";
 import * as fetchModule from "../../../fetch";
+import { CurrentlyInked } from "../CurrentlyInked";
 
 jest.mock("highcharts", () => ({}));
 

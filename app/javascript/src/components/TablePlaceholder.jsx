@@ -1,4 +1,3 @@
-import React from "react";
 import { useDelayedRender } from "../useDelayedRender";
 
 export const TablePlaceholder = () => {

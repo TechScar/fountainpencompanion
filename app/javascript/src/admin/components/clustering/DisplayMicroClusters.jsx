@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useCallback } from "react";
+import { useCallback, useContext, useEffect } from "react";
 
 import { DispatchContext, StateContext } from "./App";
 import { DisplayMicroCluster } from "./DisplayMicroCluster";

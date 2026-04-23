@@ -1,8 +1,8 @@
-import React, { useCallback, useContext, useEffect, useRef, useState } from "react";
 import convert from "color-convert";
-import { Widget, WidgetDataContext } from "./widgets";
+import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import { getRequest, putRequest } from "../fetch";
 import * as storage from "../localStorage";
+import { Widget, WidgetDataContext } from "./widgets";
 
 const RANGE_OPTIONS = [
   { value: "1m", label: "1 month" },

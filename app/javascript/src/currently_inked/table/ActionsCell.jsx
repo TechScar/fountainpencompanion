@@ -1,4 +1,3 @@
-import React from "react";
 import { UsageButton } from "../components/UsageButton";
 
 export const ActionsCell = ({ id, refillable, ink_name, used_today, onUsageRecorded }) => {

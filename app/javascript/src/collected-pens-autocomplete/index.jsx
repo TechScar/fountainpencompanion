@@ -1,4 +1,3 @@
-import React from "react";
 import { createRoot } from "react-dom/client";
 import { Autocomplete } from "../components/Autocomplete";
 import { ErrorBoundary } from "../ErrorBoundary";

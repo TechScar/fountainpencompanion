@@ -1,8 +1,8 @@
 import _ from "lodash";
-import React, { useMemo, useState } from "react";
-import { useFieldSwitcher } from "../../useFieldSwitcher";
+import { useMemo, useState } from "react";
 import { LayoutToggle } from "../../components/LayoutToggle";
 import { Switch } from "../../components/Switch";
+import { useFieldSwitcher } from "../../useFieldSwitcher";
 import "./actions.scss";
 
 /**

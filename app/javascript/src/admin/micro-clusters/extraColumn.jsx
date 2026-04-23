@@ -1,5 +1,3 @@
-import React from "react";
-
 export const extraColumn = (ci) => (
   <div
     style={{

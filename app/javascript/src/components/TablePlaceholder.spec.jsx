@@ -1,5 +1,4 @@
-import React from "react";
-import { render, act } from "@testing-library/react";
+import { act, render } from "@testing-library/react";
 import { TablePlaceholder } from "./TablePlaceholder";
 
 describe("<TablePlaceholder />", () => {

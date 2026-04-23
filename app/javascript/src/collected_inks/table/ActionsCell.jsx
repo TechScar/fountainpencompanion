@@ -1,5 +1,4 @@
-import React from "react";
-import { ArchiveButton, EditButton, DeleteButton } from "../components";
+import { ArchiveButton, DeleteButton, EditButton } from "../components";
 
 /**
  * @typedef {"bottle" | "sample" | "cartridge" | "swab"} InkType

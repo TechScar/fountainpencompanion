@@ -1,4 +1,3 @@
-import React from "react";
 import "./card.scss";
 
 export const Card = ({ className = "", ...rest }) => (

@@ -1,5 +1,3 @@
-import React from "react";
-
 /**
  * @param {{ activeLayout: "card" | "table"; onChange: (e: import('react').ChangeEvent) => void; }} props
  */

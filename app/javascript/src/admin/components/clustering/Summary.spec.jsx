@@ -1,7 +1,6 @@
-import React from "react";
 import { render, screen } from "@testing-library/react";
-import { Summary } from "./Summary";
 import { StateContext } from "./App";
+import { Summary } from "./Summary";
 
 const renderWithContext = (contextValue) => {
   return render(

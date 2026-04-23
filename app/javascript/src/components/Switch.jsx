@@ -1,4 +1,4 @@
-import React, { useId } from "react";
+import { useId } from "react";
 
 /**
  * @see https://getbootstrap.com/docs/5.3/forms/checks-radios/#switches

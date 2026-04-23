@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useMemo } from "react";
 import Jsona from "jsona";
+import { useEffect, useMemo, useState } from "react";
+import { CardsPlaceholder } from "../components/CardsPlaceholder";
+import { TablePlaceholder } from "../components/TablePlaceholder";
 import { getRequest } from "../fetch";
 import { useLayout } from "../useLayout";
 import { useScreen } from "../useScreen";
-import { CardsPlaceholder } from "../components/CardsPlaceholder";
-import { TablePlaceholder } from "../components/TablePlaceholder";
 import { CollectedInksCards } from "./cards";
 import { CollectedInksTable } from "./table";
 

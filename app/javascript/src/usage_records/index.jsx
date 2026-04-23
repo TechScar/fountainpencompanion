@@ -1,8 +1,7 @@
 /* istanbul ignore file */
-import React from "react";
 import { createRoot } from "react-dom/client";
-import { UsageRecordForm } from "./UsageRecordForm";
 import { ErrorBoundary } from "../ErrorBoundary";
+import { UsageRecordForm } from "./UsageRecordForm";
 
 document.addEventListener("DOMContentLoaded", () => {
   const el = document.getElementById("usage-record-form-app");

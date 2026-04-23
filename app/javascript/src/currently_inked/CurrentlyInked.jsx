@@ -1,13 +1,13 @@
-import React, { useState, useEffect, useCallback } from "react";
 import Jsona from "jsona";
+import _ from "lodash";
+import { useCallback, useEffect, useState } from "react";
+import { CardsPlaceholder } from "../components/CardsPlaceholder";
+import { TablePlaceholder } from "../components/TablePlaceholder";
 import { getRequest } from "../fetch";
 import { useLayout } from "../useLayout";
 import { useScreen } from "../useScreen";
-import { CardsPlaceholder } from "../components/CardsPlaceholder";
-import { TablePlaceholder } from "../components/TablePlaceholder";
 import { CurrentlyInkedCards } from "./cards/CurrentlyInkedCards";
 import { CurrentlyInkedTable } from "./table/CurrentlyInkedTable";
-import _ from "lodash";
 
 const formatter = new Jsona();
 

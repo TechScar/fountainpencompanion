@@ -1,12 +1,11 @@
-import React from "react";
 import { createRoot } from "react-dom/client";
 
+import { ErrorBoundary } from "../../ErrorBoundary";
 import { App } from "../components/clustering/App";
 import { fields } from "./fields";
 import { createMacroClusterAndAssign, getMacroClusters, updateMacroCluster } from "./macroClusters";
 import { assignCluster, getMicroClusters, ignoreCluster } from "./microClusters";
 import { withDistance } from "./withDistance";
-import { ErrorBoundary } from "../../ErrorBoundary";
 
 document.addEventListener("DOMContentLoaded", () => {
   const el = document.getElementById("pens-micro-clusters-app");

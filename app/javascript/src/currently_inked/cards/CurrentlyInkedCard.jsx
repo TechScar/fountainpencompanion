@@ -1,7 +1,6 @@
-import React from "react";
 import { Card } from "../../components/Card";
-import { UsageButton } from "../components/UsageButton";
 import { RelativeDate } from "../../components/RelativeDate";
+import { UsageButton } from "../components/UsageButton";
 import "./currently-inked-card.scss";
 
 /**

@@ -1,20 +1,20 @@
-import React, { useEffect, useMemo, useState } from "react";
 import {
-  useReactTable,
+  flexRender,
   getCoreRowModel,
   getSortedRowModel,
-  flexRender
+  useReactTable
 } from "@tanstack/react-table";
 import _ from "lodash";
+import { useEffect, useMemo, useState } from "react";
 import { RelativeDate } from "../../components/RelativeDate";
+import { Table } from "../../components/Table";
 import { useHiddenFields } from "../../useHiddenFields";
 import { Actions } from "../components";
 import { fuzzyMatch } from "../match";
+import { ActionsCell } from "./ActionsCell";
 import { Counter } from "./Counter";
 import { InkWithLink } from "./InkWithLink";
-import { Table } from "../../components/Table";
 import { booleanSort, colorSort, dateSort } from "./sort";
-import { ActionsCell } from "./ActionsCell";
 
 export const storageKeyHiddenFields = "fpc-collected-inks-table-hidden-fields";
 

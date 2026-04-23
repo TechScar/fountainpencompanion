@@ -1,4 +1,3 @@
-import React from "react";
 export const SearchLink = ({ e, fields }) => {
   const fullName = fields.map((a) => e[a]).join(" ");
   return (

@@ -1,4 +1,4 @@
-import React, { useCallback, useContext, useEffect, useState } from "react";
+import { useCallback, useContext, useEffect, useState } from "react";
 import ScrollIntoViewIfNeeded from "react-scroll-into-view-if-needed";
 
 import { DispatchContext, StateContext } from "./App";

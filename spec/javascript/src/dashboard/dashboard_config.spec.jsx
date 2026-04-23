@@ -1,7 +1,5 @@
-import React from "react";
-import { render, screen, fireEvent } from "@testing-library/react";
-import { renderHook, act } from "@testing-library/react";
-import { HiddenWidget, DraggableWidget, useDragReorder } from "dashboard/dashboard_config";
+import { act, fireEvent, render, renderHook, screen } from "@testing-library/react";
+import { DraggableWidget, HiddenWidget, useDragReorder } from "dashboard/dashboard_config";
 
 describe("HiddenWidget", () => {
   it("renders the widget content and add button", () => {

@@ -1,8 +1,7 @@
 /* istanbul ignore file */
-import React from "react";
 import { createRoot } from "react-dom/client";
-import { CurrentlyInked } from "./CurrentlyInked";
 import { ErrorBoundary } from "../ErrorBoundary";
+import { CurrentlyInked } from "./CurrentlyInked";
 
 document.addEventListener("DOMContentLoaded", () => {
   const elements = document.querySelectorAll("#currently-inked-app");

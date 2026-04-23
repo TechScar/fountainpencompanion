@@ -1,9 +1,8 @@
 // @ts-check
-import React from "react";
 import { render } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { SwabCard } from "./SwabCard";
 import { formatISO9075 } from "date-fns";
+import { SwabCard } from "./SwabCard";
 
 const setup = (jsx, options) => {
   return {

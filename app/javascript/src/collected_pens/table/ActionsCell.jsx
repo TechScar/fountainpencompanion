@@ -1,5 +1,3 @@
-import React from "react";
-
 export const ActionsCell = ({ id }) => {
   return (
     <div className="actions">

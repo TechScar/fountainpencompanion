@@ -1,5 +1,3 @@
-import React from "react";
-
 /**
  * @param {{ value?: string; row: { original: { ink_id?: string } } }} props
  */

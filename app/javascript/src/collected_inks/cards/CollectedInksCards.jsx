@@ -1,8 +1,8 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { useHiddenFields } from "../../useHiddenFields";
 import { Actions } from "../components";
-import { Cards } from "./Cards";
 import { fuzzyMatch } from "../match";
+import { Cards } from "./Cards";
 
 export const storageKeyHiddenFields = "fpc-collected-inks-cards-hidden-fields";
 

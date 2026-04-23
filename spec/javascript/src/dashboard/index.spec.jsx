@@ -1,5 +1,4 @@
-import React from "react";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 
 jest.mock("dashboard/widget_registry", () => {
   const WidgetA = () => <div data-testid="widget-a">Widget A</div>;
@@ -25,8 +24,8 @@ jest.mock("dashboard/useDashboardPreferences", () => ({
   useDashboardPreferences: jest.fn()
 }));
 
-import { useDashboardPreferences } from "dashboard/useDashboardPreferences";
 import { Dashboard } from "dashboard/index";
+import { useDashboardPreferences } from "dashboard/useDashboardPreferences";
 
 function setupPreferences(visibleIds = ["widget_a", "widget_b", "widget_c"]) {
   mockSetVisibleWidgetIds.mockClear();

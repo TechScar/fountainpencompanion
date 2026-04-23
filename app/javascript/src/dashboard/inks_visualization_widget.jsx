@@ -1,6 +1,4 @@
-import React from "react";
-import { useState } from "react";
-import { useContext } from "react";
+import { useContext, useState } from "react";
 import { colorSort } from "../color-sorting";
 import { Widget, WidgetDataContext, WidgetWidthContext } from "./widgets";
 

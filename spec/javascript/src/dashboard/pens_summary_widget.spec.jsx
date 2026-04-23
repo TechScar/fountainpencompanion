@@ -1,7 +1,6 @@
-import React from "react";
+import { render, screen } from "@testing-library/react";
 import { rest } from "msw";
 import { setupServer } from "msw/node";
-import { render, screen } from "@testing-library/react";
 
 import { PensSummaryWidget } from "dashboard/pens_summary_widget";
 
