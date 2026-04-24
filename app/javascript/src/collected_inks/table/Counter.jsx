@@ -1,5 +1,3 @@
-import React from "react";
-
 /**
  * @typedef {"bottle" | "sample" | "cartridge" | "swab"} InkType
  * @param {{ data: Record<InkType, number>; field: InkType }} props

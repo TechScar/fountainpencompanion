@@ -1,7 +1,6 @@
-import React from "react";
+import { render, screen } from "@testing-library/react";
 import { rest } from "msw";
 import { setupServer } from "msw/node";
-import { render, screen } from "@testing-library/react";
 
 import { InksGroupedByBrandWidget } from "dashboard/inks_grouped_by_brand_widget";
 

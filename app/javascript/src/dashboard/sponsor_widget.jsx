@@ -1,4 +1,3 @@
-import React from "react";
 import { Widget } from "./widgets";
 
 export const SponsorWidget = ({ renderWhenInvisible }) => (

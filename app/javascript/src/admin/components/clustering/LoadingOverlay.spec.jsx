@@ -1,7 +1,6 @@
-import React from "react";
 import { render } from "@testing-library/react";
-import { LoadingOverlay } from "./LoadingOverlay";
 import { StateContext } from "./App";
+import { LoadingOverlay } from "./LoadingOverlay";
 
 const renderWithContext = (contextValue) => {
   return render(

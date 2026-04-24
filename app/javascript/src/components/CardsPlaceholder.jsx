@@ -1,4 +1,3 @@
-import React from "react";
 import { useDelayedRender } from "../useDelayedRender";
 import { CardPlaceholder } from "./CardPlaceholder";
 import "./cards.scss";

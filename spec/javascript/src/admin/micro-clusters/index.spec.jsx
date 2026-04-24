@@ -1,7 +1,6 @@
 /**
  * @jest-environment jsdom
  */
-import React from "react";
 
 // Mock all the dependencies
 jest.mock("react-dom/client", () => ({

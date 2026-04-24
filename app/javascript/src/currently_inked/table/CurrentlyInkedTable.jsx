@@ -1,18 +1,18 @@
-import React, { useMemo, useEffect, useCallback, useState } from "react";
 import {
-  useReactTable,
+  flexRender,
   getCoreRowModel,
   getSortedRowModel,
-  flexRender
+  useReactTable
 } from "@tanstack/react-table";
 import _ from "lodash";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { RelativeDate } from "../../components/RelativeDate";
+import { Table } from "../../components/Table";
 import { useHiddenFields } from "../../useHiddenFields";
 import { Actions } from "../components/Actions";
 import { fuzzyMatch } from "../match";
-import { Table } from "../../components/Table";
-import { colorSort } from "./sort";
 import { ActionsCell } from "./ActionsCell";
-import { RelativeDate } from "../../components/RelativeDate";
+import { colorSort } from "./sort";
 
 export const storageKeyHiddenFields = "fpc-currently-inked-table-hidden-fields";
 

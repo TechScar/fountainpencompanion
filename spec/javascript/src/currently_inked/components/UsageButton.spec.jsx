@@ -1,8 +1,7 @@
-import React from "react";
-import { rest } from "msw";
-import { setupServer } from "msw/node";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { rest } from "msw";
+import { setupServer } from "msw/node";
 
 import { UsageButton } from "currently_inked/components/UsageButton";
 

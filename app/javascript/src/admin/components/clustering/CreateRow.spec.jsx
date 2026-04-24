@@ -1,8 +1,7 @@
-import React from "react";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { DispatchContext, StateContext } from "./App";
 import { CreateRow } from "./CreateRow";
-import { StateContext, DispatchContext } from "./App";
 import { REMOVE_MICRO_CLUSTER } from "./actions";
 
 // Mock the keyDownListener module

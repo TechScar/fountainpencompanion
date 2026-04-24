@@ -1,8 +1,7 @@
-import React from "react";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { DispatchContext, StateContext } from "./App";
 import { BrandSelector } from "./BrandSelector";
-import { StateContext, DispatchContext } from "./App";
 import { UPDATE_SELECTED_BRANDS } from "./actions";
 
 // Mock the keyDownListener module

@@ -1,9 +1,8 @@
-import React from "react";
-import { useState } from "react";
 import _ from "lodash";
-import { Widget } from "./widgets";
+import { useState } from "react";
 import { getRequest } from "../fetch";
 import "./pen_and_ink_suggestion_widget.css";
+import { Widget } from "./widgets";
 
 export const PenAndInkSuggestionWidget = ({ renderWhenInvisible }) => (
   <Widget

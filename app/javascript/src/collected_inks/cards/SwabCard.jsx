@@ -1,8 +1,7 @@
-import React from "react";
 import _ from "lodash";
-import { RelativeDate } from "../../components/RelativeDate";
 import { Card } from "../../components";
-import { ArchiveButton, EditButton, DeleteButton } from "../components";
+import { RelativeDate } from "../../components/RelativeDate";
+import { ArchiveButton, DeleteButton, EditButton } from "../components";
 import "./swab-card.scss";
 
 function fixedEncodeURIComponent(str) {

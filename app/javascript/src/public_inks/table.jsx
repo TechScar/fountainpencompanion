@@ -1,6 +1,6 @@
+import _ from "lodash";
 import * as React from "react";
 import ReactTable from "react-table-6";
-import _ from "lodash";
 
 export default class Table extends React.Component {
   constructor(props) {

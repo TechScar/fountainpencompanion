@@ -1,7 +1,6 @@
-import React from "react";
+import { render, screen } from "@testing-library/react";
 import { rest } from "msw";
 import { setupServer } from "msw/node";
-import { render, screen } from "@testing-library/react";
 
 import { CurrentlyInkedSummaryWidget } from "dashboard/currently_inked_summary_widget";
 

@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useMemo, useState } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { ErrorBoundary } from "../ErrorBoundary";
 import { DraggableWidget, HiddenWidget, useDragReorder } from "./dashboard_config";

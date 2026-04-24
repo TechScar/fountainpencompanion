@@ -1,4 +1,3 @@
-import React from "react";
 import { CurrentlyInkedCard } from "./CurrentlyInkedCard";
 import "./cards.scss";
 

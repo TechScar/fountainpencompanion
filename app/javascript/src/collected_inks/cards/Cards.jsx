@@ -1,4 +1,3 @@
-import React from "react";
 import { SwabCard } from "./SwabCard";
 import "./cards.scss";
 

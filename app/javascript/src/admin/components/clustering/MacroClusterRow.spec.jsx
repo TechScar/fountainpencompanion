@@ -1,8 +1,7 @@
-import React from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { DispatchContext, StateContext } from "./App";
 import { MacroClusterRow } from "./MacroClusterRow";
-import { StateContext, DispatchContext } from "./App";
 import { ASSIGN_TO_MACRO_CLUSTER, UPDATING } from "./actions";
 
 // Mock the dependencies

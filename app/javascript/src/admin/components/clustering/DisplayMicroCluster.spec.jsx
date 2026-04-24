@@ -1,7 +1,6 @@
-import React from "react";
 import { render, screen } from "@testing-library/react";
-import { DisplayMicroCluster } from "./DisplayMicroCluster";
 import { StateContext } from "./App";
+import { DisplayMicroCluster } from "./DisplayMicroCluster";
 
 // Mock the child components
 jest.mock("./CreateRow", () => ({

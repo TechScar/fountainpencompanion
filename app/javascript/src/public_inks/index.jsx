@@ -1,7 +1,6 @@
-import * as React from "react";
 import { createRoot } from "react-dom/client";
-import App from "./app";
 import { ErrorBoundary } from "../ErrorBoundary";
+import App from "./app";
 
 document.addEventListener("DOMContentLoaded", () => {
   const el = document.getElementById("new-public-inks");

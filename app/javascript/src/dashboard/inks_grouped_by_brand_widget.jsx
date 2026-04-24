@@ -1,8 +1,7 @@
-import React from "react";
 import { useContext } from "react";
-import { Pie, PieChart, Tooltip, Cell } from "recharts";
-import { Widget, WidgetDataContext, WidgetWidthContext } from "./widgets";
+import { Cell, Pie, PieChart, Tooltip } from "recharts";
 import { dataWithOtherEntry, generateColors } from "./charting";
+import { Widget, WidgetDataContext, WidgetWidthContext } from "./widgets";
 
 export const InksGroupedByBrandWidget = ({ renderWhenInvisible }) => (
   <Widget

@@ -1,9 +1,8 @@
 // @ts-check
-import React from "react";
 import { render } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { PenCard } from "./PenCard";
 import { formatISO9075 } from "date-fns";
+import { PenCard } from "./PenCard";
 
 const setup = (jsx, options) => {
   return {

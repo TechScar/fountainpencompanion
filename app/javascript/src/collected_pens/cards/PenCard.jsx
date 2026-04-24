@@ -1,7 +1,6 @@
-import React from "react";
 import { Card } from "../../components/Card";
-import "./pen-card.scss";
 import { RelativeDate } from "../../components/RelativeDate";
+import "./pen-card.scss";
 
 /**
  * @param {{

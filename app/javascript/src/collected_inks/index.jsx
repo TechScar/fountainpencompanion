@@ -1,8 +1,7 @@
 /* istanbul ignore file */
-import React from "react";
 import { createRoot } from "react-dom/client";
-import { CollectedInks } from "./CollectedInks";
 import { ErrorBoundary } from "../ErrorBoundary";
+import { CollectedInks } from "./CollectedInks";
 
 document.addEventListener("DOMContentLoaded", () => {
   const elements = document.querySelectorAll("#collected-inks .app");

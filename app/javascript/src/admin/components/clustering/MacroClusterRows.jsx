@@ -1,9 +1,9 @@
 import _ from "lodash";
 import { matchSorter } from "match-sorter";
-import React, { useContext, useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
+import { StateContext } from "./App";
 import { MacroClusterRow } from "./MacroClusterRow";
 import { setInBrandSelector } from "./keyDownListener";
-import { StateContext } from "./App";
 
 export const MacroClusterRows = ({
   afterAssign,

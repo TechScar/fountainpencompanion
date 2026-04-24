@@ -1,6 +1,5 @@
 // @ts-check
-import React from "react";
-import { render, act, waitFor } from "@testing-library/react";
+import { act, render, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { CollectedPensTable, storageKeyHiddenFields } from "./CollectedPensTable";
 

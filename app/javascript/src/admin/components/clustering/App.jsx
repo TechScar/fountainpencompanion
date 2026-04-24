@@ -2,10 +2,10 @@ import React, { useEffect, useReducer } from "react";
 
 import { Spinner } from "../Spinner";
 import { BrandSelector } from "./BrandSelector";
+import { DisplayMicroClusters } from "./DisplayMicroClusters";
 import { LoadingOverlay } from "./LoadingOverlay";
 import { Summary } from "./Summary";
 import { initalState, reducer } from "./reducer";
-import { DisplayMicroClusters } from "./DisplayMicroClusters";
 
 export const StateContext = React.createContext();
 export const DispatchContext = React.createContext();

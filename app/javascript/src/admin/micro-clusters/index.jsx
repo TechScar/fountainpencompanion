@@ -1,6 +1,6 @@
-import React from "react";
 import { createRoot } from "react-dom/client";
 
+import { ErrorBoundary } from "../../ErrorBoundary";
 import { App } from "../components/clustering/App";
 import { assignCluster } from "./assignCluster";
 import { createMacroClusterAndAssign } from "./createMacroClusterAndAssign";
@@ -9,7 +9,6 @@ import { ignoreCluster } from "./ignoreCluster";
 import { getMacroClusters, updateMacroCluster } from "./macroClusters";
 import { getMicroClusters } from "./microClusters";
 import { withDistance } from "./withDistance";
-import { ErrorBoundary } from "../../ErrorBoundary";
 
 document.addEventListener("DOMContentLoaded", () => {
   const el = document.getElementById("micro-clusters-app");

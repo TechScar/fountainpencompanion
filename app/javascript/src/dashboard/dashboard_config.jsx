@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { WIDGET_REGISTRY_MAP } from "./widget_registry";
 
 export const HiddenWidget = ({ id, onAdd }) => {

@@ -1,5 +1,3 @@
-import React from "react";
-
 /**
  * @param {{ name: string; id: string; archived: boolean }} props
  */

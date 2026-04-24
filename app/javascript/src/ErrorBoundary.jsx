@@ -1,4 +1,3 @@
-import React from "react";
 import { HoneybadgerErrorBoundary } from "@honeybadger-io/react";
 import honeybadger from "./honeybadger";
 

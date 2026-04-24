@@ -1,5 +1,4 @@
-import React from "react";
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import TrackVisibility from "react-on-screen";
 import { getRequest, postRequest } from "../fetch";
 
